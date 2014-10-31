@@ -1,10 +1,11 @@
 class Console:
-    def run(self):
+    def run(self, interpreter):
         try:
             while True:
-                self.interact()
+                self.interact(interpreter)
         except EOFError:
             print()
 
-    def interact(self):
-        input('SQL> ')
+    def interact(self, interpreter):
+        statement = input('SQL> ')
+        interpreter.eval(statement)
