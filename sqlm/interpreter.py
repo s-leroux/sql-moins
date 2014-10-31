@@ -9,17 +9,24 @@ class Interpreter:
     def __init__(self):
         self.engine = None
         self.commands = {
-                'QUIT': self.doQuit,
-                'CONNECT': self.doConnect
+                'QUIT':     dict(action=self.doQuit,
+                                usage="quit",
+                                desc="quit the command line interpreter"),
+                'CONNECT':  dict(action=self.doConnect,
+                                usage="connect url",
+                                desc="establish a connection to the database"),
+                'HELP':     dict(action=self.doHelp,
+                                usage="help [command]",
+                                desc="get some help"),
         }
 
     def eval(self, statement):
         args = statement.split() # XXX Maybe we should be smarter here (quotes?)
 
         if args: # Ignore blank lines
-            cmd = self.commands.get(args[0].upper(), self.doDefault)
+            cmd = self.commands.get(args[0].upper(), dict(action=self.doDefault))
             try:
-                result = cmd(statement, *args[1:])
+                result = cmd['action'](statement, *args[1:])
                 if result:
                     print("ok -", result)
             except ArgumentError as err:
@@ -31,6 +38,25 @@ class Interpreter:
             raise ArgumentError("No argument required")
 
         raise EOFError
+
+    def doHelp(self, statement, *args):
+        def showCommandHelp(cmd):
+            usage = self.commands[cmd].get('usage','')
+            desc = self.commands[cmd].get('desc','')
+            print("    {:20s} - {:s}".format(usage, desc))
+
+        if len(args) > 1:
+            raise ArgumentError("Usage: help [command]")
+
+        if len(args) == 1:
+            cmd = args[0].upper()
+            if cmd in self.commands:
+                showCommandHelp(cmd)
+                return
+
+        # fall back    
+        for cmd in self.commands:
+            showCommandHelp(cmd)
 
     def doConnect(self, statement, *args):
         if len(args) != 1:
