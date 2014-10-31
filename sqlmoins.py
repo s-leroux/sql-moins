@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
-quit = False
-while not quit:
-    input("SQL> ")
+from sqlm.console import Console
+
+console = Console()
+console.run()
