@@ -1,10 +1,16 @@
+import sys
+
 class Console:
     def run(self, interpreter):
-        try:
-            while True:
+        quit = False
+        while not quit:
+            try:
                 self.interact(interpreter)
-        except EOFError:
-            print()
+            except EOFError:
+                quit = True
+                print()
+            except Exception as err:
+                print(err, file=sys.stderr)
 
     def interact(self, interpreter):
         statement = input('SQL> ')

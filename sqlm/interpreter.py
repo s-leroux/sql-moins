@@ -1,4 +1,5 @@
 import sys
+import sqlalchemy
 
 class ArgumentError(Exception):
     def __init__(self, message):
@@ -6,6 +7,7 @@ class ArgumentError(Exception):
 
 class Interpreter:
     def __init__(self):
+        self.engine = None
         self.commands = {
                 'QUIT': self.doQuit,
                 'CONNECT': self.doConnect
@@ -17,19 +19,27 @@ class Interpreter:
         if args: # Ignore blank lines
             cmd = self.commands.get(args[0].upper(), self.doDefault)
             try:
-                cmd(*args)
+                result = cmd(statement, *args[1:])
+                if result:
+                    print("ok -", result)
             except ArgumentError as err:
                 print("Error: command", args[0], file=sys.stderr)
                 print("   ", err.args[0], file=sys.stderr)
 
-    def doQuit(self, *args):
-        if len(args) > 1:
+    def doQuit(self, statement, *args):
+        if len(args) > 0:
             raise ArgumentError("No argument required")
 
         raise EOFError
 
-    def doConnect(self, *args):
-        pass
+    def doConnect(self, statement, *args):
+        if len(args) != 1:
+            raise ArgumentError("Usage: connect url")
 
-    def doDefault(self, *args):
+        (url, ) = args
+        self.engine = sqlalchemy.create_engine(url)
+        return self.engine
+
+    def doDefault(self, statement, *args):
+        self.engine.execute(statement)
         pass
