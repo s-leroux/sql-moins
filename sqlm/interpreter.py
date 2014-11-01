@@ -1,4 +1,6 @@
 import sys
+import re
+from getpass import getpass
 import sqlalchemy
 
 class ArgumentError(Exception):
@@ -59,11 +61,30 @@ class Interpreter:
             showCommandHelp(cmd)
 
     def doConnect(self, statement, *args):
+        """Establish a connection to the database
+
+        ``url`` is assumed to be a valid sqlalchemy connection URL
+        of the form ``dialect[+driver]://user:password@host/dbname[?key=value..]``
+
+        If the password is missing, request it from the console
+        """
+
         if len(args) != 1:
             raise ArgumentError("Usage: connect url")
 
-        (url, ) = args
-        self.engine = sqlalchemy.create_engine(url)
+        purl = re.split('(:|@)', args[0])
+        #                ^^^^^
+        #            is this correct?
+
+        if len(purl) < 3 or purl[3] not in (':', '@'):
+            raise ArgumentError("Can't parse URL")
+
+        if purl[3] == '@':
+            # No password
+            passwd = getpass()
+            purl = purl[:3] + [':', passwd] + purl[3:]
+
+        self.engine = sqlalchemy.create_engine("".join(purl))
         return self.engine
 
     def doDefault(self, statement, *args):

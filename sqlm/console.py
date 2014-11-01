@@ -1,4 +1,18 @@
+import os
 import sys
+import atexit
+import readline
+
+#
+# from https://docs.python.org/3/library/readline.html#example
+#
+histfile = os.path.join(os.path.expanduser("~"), ".sqlmoins_history")
+try:
+    readline.read_history_file(histfile)
+except FileNotFoundError:
+    pass
+
+atexit.register(readline.write_history_file, histfile)
 
 class Console:
     def run(self, interpreter):
