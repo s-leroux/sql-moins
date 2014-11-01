@@ -2,6 +2,7 @@ import os
 import sys
 import atexit
 import readline
+import traceback
 
 #
 # from https://docs.python.org/3/library/readline.html#example
@@ -25,7 +26,15 @@ class Console:
                 print()
             except Exception as err:
                 print(err, file=sys.stderr)
+                traceback.print_tb(err.__traceback__)
 
     def interact(self, interpreter):
-        statement = input('SQL> ')
-        interpreter.eval(statement)
+        prompt = 'SQL> '
+        n = 1
+        while True:
+            line = input(prompt)
+            if interpreter.push(line) == 0:
+                break
+
+            n += 1
+            prompt = '{:3d}  '.format(n)
