@@ -7,46 +7,6 @@ class ArgumentError(Exception):
     def __init__(self, message):
         super(ArgumentError, self).__init__(message)
 
-class Command:
-    def __init__(self):
-        self.buffer = []
-
-    def statement(self):
-        return '\n'.join(self.buffer)
-
-class InternalCommand(Command):
-    def push(self, line):
-        self.buffer.append(line)
-        return True
-
-    def run(self, interpreter):
-        interpreter.eval(self.statement())
-
-class SQLCommand(Command):
-    def push(self, line):
-        isLast = False
-        line = line.rstrip()
-        if line.endswith(';'):
-            line = line[:-1].rstrip()
-            isLast = True
-
-        self.buffer.append(line)
-        return isLast
-
-    def run(self, interpreter):
-        interpreter.send(self.statement())
-
-class OtherCommand(Command):
-    def push(self, line):
-        if line.strip() == '/':
-            return True
-
-        self.buffer.append(line)
-        return False
-
-    def run(self, interpreter):
-        interpreter.send(self.statement())
-
 class SQLDialect:
     def __init__(self, action):
         self._action = action
@@ -137,7 +97,7 @@ class Statement:
                                 line))
 
         self._dialect = self.findDialect(self._statement + '\n' + line)
-        print(self._dialect)
+        #print(self._dialect)
 
         if self._dialect:
             line, self._completed = self._dialect.filter(line)
