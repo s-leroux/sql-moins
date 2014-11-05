@@ -22,6 +22,20 @@ class InternalCommand(Command):
     def run(self, interpreter):
         interpreter.eval(self.statement())
 
+class SQLCommand(Command):
+    def push(self, line):
+        isLast = False
+        line = line.rstrip()
+        if line.endswith(';'):
+            line = line[:-1].rstrip()
+            isLast = True
+
+        self.buffer.append(line)
+        return isLast
+
+    def run(self, interpreter):
+        interpreter.send(self.statement())
+
 class OtherCommand(Command):
     def push(self, line):
         if line.strip() == '/':
@@ -32,6 +46,122 @@ class OtherCommand(Command):
 
     def run(self, interpreter):
         interpreter.send(self.statement())
+
+class SQLDialect:
+    def __init__(self, action):
+        self._action = action
+
+    def match(self, tokens):
+        """Check if a list of tokens (``words'') match the current dialect.
+        """
+        #print("test",tokens)
+        if "".join(tokens[:1]).upper() in ('INSERT', 'UPDATE', 'MERGE', 
+                                         'DELETE', 'SELECT',
+                                         'DROP'):
+            return True
+        elif " ".join(tokens[0:2]).upper() in ('CREATE TABLE', 'CREATE VIEW'):
+            return True
+        
+        return False
+
+    def do(self, statement):
+        self._action(statement)
+
+    def filter(self, line):
+        """Filter an input line to check for end-of-statement.
+
+        For SQL, a semi-colon indicates the end-of-statement. The semi-colon
+        should be removed from the statement
+        """
+        line = line.rstrip()
+        if line and line[-1] == ';':
+            return (line[:-1], True)
+        else:
+            return (line, False)
+
+class InternalDialect:
+    def __init__(self, action):
+        self._action = action
+
+    def match(self, tokens):
+        """Check if a list of tokens (``words'') match the current dialect.
+        """
+        if "".join(tokens[:1]).upper() in ('QUIT','CONNECT','HELP'):
+            return True
+        
+        return False
+
+    def do(self, statement):
+        self._action(statement)
+
+    def filter(self, line):
+        """Filter an input line to check for end-of-statement.
+
+        Internal commands are one line only.
+        """
+        return (line, True)
+
+class PLDialect:
+    def __init__(self, action):
+        self._action = action
+
+    def match(self, tokens):
+        """Check if a list of tokens (``words'') match the current dialect.
+        """
+        return True
+
+    def do(self, statement):
+        self._action(statement)
+
+    def filter(self, line):
+        if line.strip() == '/':
+            return ("", True)
+        else:
+            return (line, False)
+
+
+class Statement:
+    def __init__(self, dialects):
+        self._statement = ""
+        self._dialects = dialects
+        self._dialect = None
+        self._completed = False
+
+    def __str__(self):
+        return self._statement
+
+    def push(self, line):
+        if self._completed:
+            raise ValueError("Statement {} is completed. Can't add {}".format(
+                                self._statement,
+                                line))
+
+        self._dialect = self.findDialect(self._statement + '\n' + line)
+        print(self._dialect)
+
+        if self._dialect:
+            line, self._completed = self._dialect.filter(line)
+
+        if self._statement:
+            self._statement += '\n'
+        self._statement += line
+
+        return self._completed
+
+    def doIt(self):
+        self._dialect.do(self._statement)
+
+    def findDialect(self, statement):
+        """Try to identify the dialect of the statement.
+
+        Returns None if the dialect can't be identified.
+        """
+        tokens = statement[0:20].split()
+        for dialect in self._dialects:
+            if dialect.match(tokens):
+                return dialect
+
+        return None
 
 
 class Interpreter:
@@ -50,6 +180,10 @@ class Interpreter:
         }
         self.curr = None
         self.prev = None
+        self._dialects = (InternalDialect(self.eval),
+                          SQLDialect(self.send),
+                          PLDialect(self.send))
+
 
     def push(self, line):
         """Push a command line into the buffer.
@@ -63,34 +197,36 @@ class Interpreter:
 
         Returns 0 if the command was executed
         """
-        line = line.strip()
+        line = line.rstrip()
+
+        if line.strip() == '/':
+            # special case: if there is a pending command, terminate it
+            # and execute
+            if self.curr:
+                (self.prev, self.curr) = (self.curr, None)
+
+            if self.prev:
+                self.send(self.prev)
+
+            return 0
 
         if not self.curr:
             # First line of a new statement
             if not line:
                 return 0
 
-            if line == '/':
-                if self.prev:
-                    self.prev.run(self)
-                return 0
-
-            tk = line.split()
-            if tk[0].upper() in self.commands:
-                self.curr = InternalCommand()
-            else:
-                self.curr = OtherCommand()
+            stmt = Statement(self._dialects)
+            (self.prev, self.curr) = (self.curr, stmt)
 
         if self.curr.push(line):
-            self.curr.run(self)
             (self.prev, self.curr) = (self.curr, None)
+            self.prev.doIt()
             return 0
         else:
             return 1
 
-            
-
     def eval(self, statement):
+        statement = str(statement)
         args = statement.split() # XXX Maybe we should be smarter here (quotes?)
 
         if args: # Ignore blank lines
@@ -156,5 +292,6 @@ class Interpreter:
         return self.engine
 
     def send(self, statement):
+        statement = str(statement)
         self.engine.execute(statement)
         pass
