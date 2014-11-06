@@ -40,13 +40,14 @@ class SQLDialect:
             return (line, False)
 
 class InternalDialect:
-    def __init__(self, action):
+    def __init__(self, commands, action):
+        self._commands = commands
         self._action = action
 
     def match(self, tokens):
         """Check if a list of tokens (``words'') match the current dialect.
         """
-        if "".join(tokens[:1]).upper() in ('QUIT','CONNECT','HELP'):
+        if "".join(tokens[:1]).upper() in self._commands:
             return True
         
         return False
@@ -123,10 +124,32 @@ class Statement:
 
         return None
 
+class Environment:
+    def __init__(self):
+        self.errorHandlers = {
+            "DEBUG":    self.reportErrorDebug,
+            "NORM":     self.reportErrorNorm,
+        };
+        self.reportError = self.errorHandlers["NORM"]
+
+    def setErrorLevel(self, level):
+        handler = self.errorHandlers.get(level.upper())
+        if handler:
+            self.errorHandler = handler
+        else:
+            raise("Invalid error level: " + level)
+
+    def reportErrorDebug(self,err):
+        print(err, file=sys.stderr)
+        traceback.print_tb(err.__traceback__)
+
+    def reportErrorNorm(self, err):
+        print(err, file=sys.stderr)
 
 class Interpreter:
-    def __init__(self):
+    def __init__(self, env):
         self.engine = None
+        self.environment = env
         self.commands = {
                 'QUIT':     dict(action=self.doQuit,
                                 usage="quit",
@@ -137,10 +160,13 @@ class Interpreter:
                 'HELP':     dict(action=self.doHelp,
                                 usage="help [command]",
                                 desc="get some help"),
+                'SET':     dict(action=self.doSet,
+                                usage="set param value",
+                                desc="Change internal parameter"),
         }
         self.curr = None
         self.prev = None
-        self._dialects = (InternalDialect(self.eval),
+        self._dialects = (InternalDialect(self.commands, self.eval),
                           SQLDialect(self.send),
                           PLDialect(self.send))
 
@@ -224,6 +250,16 @@ class Interpreter:
         for cmd in self.commands:
             showCommandHelp(cmd)
 
+    def doSet(self, statement, *args):
+        if len(args) != 2:
+            raise ArgumentError("2 arguments required")
+
+        if args[0].upper() == "ERRORLEVEL":
+            self.environment.setErrorLevel(args[1].upper())
+        else:
+            raise ArgumentError("Invalid parameter: "+args[0])
+        
+
     def doConnect(self, statement, *args):
         """Establish a connection to the database
 
@@ -255,3 +291,4 @@ class Interpreter:
         statement = str(statement)
         self.engine.execute(statement)
         pass
+        

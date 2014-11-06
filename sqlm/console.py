@@ -16,8 +16,9 @@ except FileNotFoundError:
 atexit.register(readline.write_history_file, histfile)
 
 class Console:
-    def run(self, interpreter):
+    def run(self, interpreter, env):
         quit = False
+
         while not quit:
             try:
                 self.interact(interpreter)
@@ -25,8 +26,7 @@ class Console:
                 quit = True
                 print()
             except Exception as err:
-                print(err, file=sys.stderr)
-                traceback.print_tb(err.__traceback__)
+                env.reportError(err)
 
     def interact(self, interpreter):
         prompt = 'SQL> '
@@ -38,3 +38,4 @@ class Console:
 
             n += 1
             prompt = '{:3d}  '.format(n)
+
