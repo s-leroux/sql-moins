@@ -2,6 +2,7 @@ import sys
 import re
 from getpass import getpass
 import sqlalchemy
+import traceback
 
 class ArgumentError(Exception):
     def __init__(self, message):
@@ -25,7 +26,7 @@ class SQLDialect:
         return False
 
     def do(self, statement):
-        self._action(statement)
+        return self._action(statement)
 
     def filter(self, line):
         """Filter an input line to check for end-of-statement.
@@ -53,7 +54,7 @@ class InternalDialect:
         return False
 
     def do(self, statement):
-        self._action(statement)
+        return self._action(statement)
 
     def filter(self, line):
         """Filter an input line to check for end-of-statement.
@@ -72,7 +73,7 @@ class PLDialect:
         return True
 
     def do(self, statement):
-        self._action(statement)
+        return self._action(statement)
 
     def filter(self, line):
         if line.strip() == '/':
@@ -110,7 +111,7 @@ class Statement:
         return self._completed
 
     def doIt(self):
-        self._dialect.do(self._statement)
+        return self._dialect.do(self._statement)
 
     def findDialect(self, statement):
         """Try to identify the dialect of the statement.
@@ -135,7 +136,7 @@ class Environment:
     def setErrorLevel(self, level):
         handler = self.errorHandlers.get(level.upper())
         if handler:
-            self.errorHandler = handler
+            self.reportError = handler
         else:
             raise("Invalid error level: " + level)
 
@@ -192,7 +193,9 @@ class Interpreter:
                 (self.prev, self.curr) = (self.curr, None)
 
             if self.prev:
-                self.send(self.prev)
+                result = self.prev.doIt()
+                if result:
+                    self.display(result)
 
             return 0
 
@@ -206,7 +209,9 @@ class Interpreter:
 
         if self.curr.push(line):
             (self.prev, self.curr) = (self.curr, None)
-            self.prev.doIt()
+            result = self.prev.doIt()
+            if result:
+                self.display(result)
             return 0
         else:
             return 1
@@ -287,8 +292,15 @@ class Interpreter:
         self.engine = sqlalchemy.create_engine("".join(purl))
         return self.engine
 
+    def display(self, result):
+        if result.returns_rows:
+            print(result.keys())
+            for row in result:
+                print(row)
+        if result.rowcount >= 0:
+            print("Found",result.rowcount,"rows")
+
     def send(self, statement):
         statement = str(statement)
-        self.engine.execute(statement)
-        pass
+        return self.engine.execute(statement)
         
