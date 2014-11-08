@@ -4,6 +4,8 @@ from getpass import getpass
 import sqlalchemy
 import traceback
 
+from sqlm.formatter import TabularFormatter
+
 class ArgumentError(Exception):
     def __init__(self, message):
         super(ArgumentError, self).__init__(message)
@@ -151,6 +153,8 @@ class Interpreter:
     def __init__(self, env):
         self.engine = None
         self.environment = env
+        self.formatter = TabularFormatter()
+
         self.commands = {
                 'QUIT':     dict(action=self.doQuit,
                                 usage="quit",
@@ -294,9 +298,7 @@ class Interpreter:
 
     def display(self, result):
         if result.returns_rows:
-            print(result.keys())
-            for row in result:
-                print(row)
+            self.formatter.display(self.environment, result)
         if result.rowcount >= 0:
             print("Found",result.rowcount,"rows")
 
