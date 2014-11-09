@@ -5,42 +5,12 @@ import sqlalchemy
 import traceback
 
 from sqlm.formatter import TabularFormatter
+from sqlm.dialects import Dialects
 
 class ArgumentError(Exception):
     def __init__(self, message):
         super(ArgumentError, self).__init__(message)
 
-class SQLDialect:
-    def __init__(self, action):
-        self._action = action
-
-    def match(self, tokens):
-        """Check if a list of tokens (``words'') match the current dialect.
-        """
-        #print("test",tokens)
-        if "".join(tokens[:1]).upper() in ('INSERT', 'UPDATE', 'MERGE', 
-                                         'DELETE', 'SELECT',
-                                         'DROP'):
-            return True
-        elif " ".join(tokens[0:2]).upper() in ('CREATE TABLE', 'CREATE VIEW'):
-            return True
-        
-        return False
-
-    def do(self, statement):
-        return self._action(statement)
-
-    def filter(self, line):
-        """Filter an input line to check for end-of-statement.
-
-        For SQL, a semi-colon indicates the end-of-statement. The semi-colon
-        should be removed from the statement
-        """
-        line = line.rstrip()
-        if line and line[-1] == ';':
-            return (line[:-1], True)
-        else:
-            return (line, False)
 
 class InternalDialect:
     def __init__(self, commands, action):
@@ -172,7 +142,7 @@ class Interpreter:
         self.curr = None
         self.prev = None
         self._dialects = (InternalDialect(self.commands, self.eval),
-                          SQLDialect(self.send),
+                          Dialects[""](self.send),
                           PLDialect(self.send))
 
 
@@ -294,6 +264,11 @@ class Interpreter:
             purl = purl[:3] + [':', passwd] + purl[3:]
 
         self.engine = sqlalchemy.create_engine("".join(purl))
+
+        self._dialects = (InternalDialect(self.commands, self.eval),
+                          Dialects[purl[0].upper()](self.send),
+                          PLDialect(self.send))
+
         return self.engine
 
     def display(self, result):
