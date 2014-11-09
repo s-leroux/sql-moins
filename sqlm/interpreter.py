@@ -6,6 +6,7 @@ import traceback
 
 from sqlm.formatter import TabularFormatter
 from sqlm.dialects import Dialects
+from sqlm.dialects.dialect import Dialect
 
 class ArgumentError(Exception):
     def __init__(self, message):
@@ -35,24 +36,13 @@ class InternalDialect:
         """
         return (line, True)
 
-class PLDialect:
-    def __init__(self, action):
-        self._action = action
-
+class PLDialect(Dialect):
+    """``Match all'' dialect
+    """
     def match(self, tokens):
         """Check if a list of tokens (``words'') match the current dialect.
         """
         return True
-
-    def do(self, statement):
-        return self._action(statement)
-
-    def filter(self, line):
-        if line.strip() == '/':
-            return ("", True)
-        else:
-            return (line, False)
-
 
 class Statement:
     def __init__(self, dialects):
