@@ -181,9 +181,7 @@ class Interpreter:
                 (self.prev, self.curr) = (self.curr, None)
 
             if self.prev:
-                result = self.prev.doIt()
-                if result:
-                    self.display(result)
+                self.prev.doIt()
 
             return 0
 
@@ -197,9 +195,7 @@ class Interpreter:
 
         if self.curr.push(line):
             (self.prev, self.curr) = (self.curr, None)
-            result = self.prev.doIt()
-            if result:
-                self.display(result)
+            self.prev.doIt()
             return 0
         else:
             return 1
@@ -285,13 +281,18 @@ class Interpreter:
 
         return self.engine
 
-    def display(self, result):
+    def display(self, result, tagline = None):
         if result.returns_rows:
             self.formatter.display(self.environment, result)
-        if result.rowcount >= 0:
-            print("Found",result.rowcount,"rows")
 
-    def send(self, statement):
+        rowcount = result.rowcount
+        if tagline and rowcount >= 0:
+            print(tagline.format(n=rowcount,
+                                 rows="rows" if rowcount > 1 else "row"))
+
+    def send(self, statement, tagline = None):
         statement = str(statement)
-        return self.engine.execute(statement)
+        result = self.engine.execute(statement)
+        if result:
+            self.display(result, tagline)
         

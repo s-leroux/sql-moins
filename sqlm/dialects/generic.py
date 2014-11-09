@@ -1,5 +1,9 @@
 from  sqlm.dialects.dialect import Dialect, SQLCommand
 
+class InsertCommand(SQLCommand):
+    def doIt(self):
+        return self._action(self._statement, "{n:} {rows:} created")
+
 class GenericDialect(Dialect):
     def match(self, tokens):
         """Check if a list of tokens (``words'') match the current dialect.
@@ -8,7 +12,9 @@ class GenericDialect(Dialect):
 
         # 1 word statements
         stmt = " ".join(tokens[:1]).upper()
-        if stmt in ('INSERT', 'UPDATE',
+        if stmt == 'INSERT':
+            return InsertCommand(self._action)
+        elif stmt in ('INSERT', 'UPDATE',
                     'DELETE', 'SELECT',
                     'DROP'):
             return SQLCommand(self._action)
