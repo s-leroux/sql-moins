@@ -6,12 +6,19 @@ import traceback
 
 from sqlm.formatter import TabularFormatter
 from sqlm.dialects import Dialects
-from sqlm.dialects.dialect import Dialect
+from sqlm.dialects.dialect import Dialect, Command
 
 class ArgumentError(Exception):
     def __init__(self, message):
         super(ArgumentError, self).__init__(message)
 
+class InternalCommand(Command):
+    def filter(self, line):
+        """Filter an input line to check for end-of-statement.
+
+        Internal commands are one line only.
+        """
+        return (line, True)
 
 class InternalDialect(Dialect):
     def __init__(self, commands, action):
@@ -22,16 +29,10 @@ class InternalDialect(Dialect):
         """Check if a list of tokens (``words'') match the current dialect.
         """
         if "".join(tokens[:1]).upper() in self._commands:
-            return True
+            return InternalCommand(self._action)
         
-        return False
+        return None
 
-    def filter(self, line):
-        """Filter an input line to check for end-of-statement.
-
-        Internal commands are one line only.
-        """
-        return (line, True)
 
 class PLDialect(Dialect):
     """``Match all'' dialect
@@ -39,13 +40,13 @@ class PLDialect(Dialect):
     def match(self, tokens):
         """Check if a list of tokens (``words'') match the current dialect.
         """
-        return True
+        return Command(self._action)
 
 class Statement:
     def __init__(self, dialects):
         self._statement = ""
         self._dialects = dialects
-        self._dialect = None
+        self._command = None
         self._completed = False
 
     def __str__(self):
@@ -57,11 +58,11 @@ class Statement:
                                 self._statement,
                                 line))
 
-        self._dialect = self.findDialect(self._statement + '\n' + line)
+        self._command = self.findCommand(self._statement + '\n' + line)
         #print(self._dialect)
 
-        if self._dialect:
-            line, self._completed = self._dialect.filter(line)
+        if self._command:
+            line, self._completed = self._command.filter(line)
 
         if self._statement:
             self._statement += '\n'
@@ -70,17 +71,18 @@ class Statement:
         return self._completed
 
     def doIt(self):
-        return self._dialect.do(self._statement)
+        return self._command.do(self._statement)
 
-    def findDialect(self, statement):
+    def findCommand(self, statement):
         """Try to identify the dialect of the statement.
 
         Returns None if the dialect can't be identified.
         """
         tokens = statement[0:20].split()
         for dialect in self._dialects:
-            if dialect.match(tokens):
-                return dialect
+            cmd = dialect.match(tokens)
+            if cmd:
+                return cmd
 
         return None
 

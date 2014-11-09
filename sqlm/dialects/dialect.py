@@ -1,11 +1,8 @@
-class Dialect:
-    """Base class for every dialect
+class Command:
+    """Base class for every command
     """
     def __init__(self, action):
         self._action = action
-
-    def match(self, tokens):
-        return False
 
     def do(self, statement):
         return self._action(statement)
@@ -15,7 +12,7 @@ class Dialect:
         """
         return (line, False)
 
-class SQLDialect(Dialect):
+class SQLCommand(Command):
     def filter(self, line):
         """Filter an input line to check for end-of-statement.
 
@@ -27,3 +24,13 @@ class SQLDialect(Dialect):
             return (line[:-1], True)
         else:
             return (line, False)
+    
+class Dialect:
+    """Base class for every dialect
+    """
+    def __init__(self, action):
+        self._action = action
+
+    def match(self, tokens):
+        return False
+

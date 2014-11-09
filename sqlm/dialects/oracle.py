@@ -1,6 +1,6 @@
-from  sqlm.dialects.dialect import SQLDialect
+from  sqlm.dialects.dialect import Dialect, SQLCommand
 
-class OracleDialect(SQLDialect):
+class OracleDialect(Dialect):
     def match(self, tokens):
         """Check if a list of tokens (``words'') match the current dialect.
         """
@@ -8,9 +8,9 @@ class OracleDialect(SQLDialect):
         if "".join(tokens[:1]).upper() in ('INSERT', 'UPDATE', 'MERGE', 
                                          'DELETE', 'SELECT',
                                          'DROP'):
-            return True
+            return SQLCommand(self._action)
         elif " ".join(tokens[0:2]).upper() in ('CREATE TABLE', 'CREATE VIEW'):
-            return True
+            return SQLCommand(self._action)
         
-        return False
+        return None
 
