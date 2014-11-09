@@ -5,12 +5,20 @@ class OracleDialect(Dialect):
         """Check if a list of tokens (``words'') match the current dialect.
         """
         #print("test",tokens)
-        if "".join(tokens[:1]).upper() in ('INSERT', 'UPDATE', 'MERGE', 
-                                         'DELETE', 'SELECT',
-                                         'DROP'):
+
+        # 1 word statements
+        stmt = " ".join(tokens[:1]).upper()
+        if stmt in ('INSERT', 'UPDATE', 'MERGE',
+                    'DELETE', 'SELECT',
+                    'DROP'):
             return SQLCommand(self._action)
-        elif " ".join(tokens[0:2]).upper() in ('CREATE TABLE', 'CREATE VIEW'):
+
+        # 2 words statements
+        stmt = " ".join(tokens[:2]).upper()
+        if stmt in ('CREATE TABLE', 'CREATE VIEW'):
             return SQLCommand(self._action)
+        elif stmt in ('CREATE'):
+            return None # Undefined
         
-        return None
+        return False # Not an SQL statement
 

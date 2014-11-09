@@ -18,7 +18,9 @@ class InternalCommand(Command):
 
         Internal commands are one line only.
         """
-        return (line, True)
+        self.push(line)
+        self._completed = True
+        return self
 
 class InternalDialect(Dialect):
     def __init__(self, commands, action):
@@ -31,8 +33,10 @@ class InternalDialect(Dialect):
         if "".join(tokens[:1]).upper() in self._commands:
             return InternalCommand(self._action)
         
-        return None
+        return False
 
+class PLCommand(Command):
+    pass
 
 class PLDialect(Dialect):
     """``Match all'' dialect
@@ -40,51 +44,72 @@ class PLDialect(Dialect):
     def match(self, tokens):
         """Check if a list of tokens (``words'') match the current dialect.
         """
-        return Command(self._action)
+        return PLCommand(self._action)
+
+class GenericCommand(Command):
+    def __init__(self, dialects):
+        super(GenericCommand,self).__init__(None)
+        self._dialects = dialects
+
+    def tokenize(self):
+        stmt = self._statement.rstrip()
+
+        # Remove trailing ';' for token parsing
+        # AFAICT the only legal use of a semi-colon at end-of-line
+        # is to end an SQL statement.
+        if stmt.endswith(';'):
+            stmt = stmt[:-1]
+
+        return stmt.split()
+
+    def filter(self, line):
+        self.push(line)
+        tokens = self.tokenize()
+        dialects = self._dialects
+
+        while dialects:
+            dialect, *dialects = dialects
+            cmd = dialect.match(tokens)
+            print(dialect, cmd)
+            if cmd:
+                return cmd.filter(self._statement)
+            elif cmd is None:
+                break
+
+        self._dialects = dialects
+        return self
+
+    def doIt(self):
+        tokens = self.tokenize()
+        for dialect in self.dialects:
+            cmd = dialect.match(tokens)
+            if cmd:
+                cmd = cmd.filter(self._statement)
+                return cmd.doIt()
+
+        return None
+        
 
 class Statement:
     def __init__(self, dialects):
-        self._statement = ""
-        self._dialects = dialects
-        self._command = None
+        self._command = GenericCommand(dialects)
         self._completed = False
 
     def __str__(self):
-        return self._statement
+        return self._command._statement
 
     def push(self, line):
-        if self._completed:
+        if self._command._completed:
             raise ValueError("Statement {} is completed. Can't add {}".format(
                                 self._statement,
                                 line))
 
-        self._command = self.findCommand(self._statement + '\n' + line)
-        #print(self._dialect)
-
-        if self._command:
-            line, self._completed = self._command.filter(line)
-
-        if self._statement:
-            self._statement += '\n'
-        self._statement += line
-
-        return self._completed
+        self._command = self._command.filter(line)
+        # print(self._command)
+        return self._command._completed
 
     def doIt(self):
-        return self._command.do(self._statement)
-
-    def findCommand(self, statement):
-        """Try to identify the dialect of the statement.
-
-        Returns None if the dialect can't be identified.
-        """
-        tokens = statement[0:20].split()
-        for dialect in self._dialects:
-            cmd = dialect.match(tokens)
-            if cmd:
-                return cmd
-
-        return None
+        return self._command.doIt()
 
 class Environment:
     def __init__(self):

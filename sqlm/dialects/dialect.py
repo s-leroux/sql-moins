@@ -3,14 +3,22 @@ class Command:
     """
     def __init__(self, action):
         self._action = action
+        self._statement = ""
+        self._completed = False
 
-    def do(self, statement):
-        return self._action(statement)
+    def doIt(self):
+        return self._action(self._statement)
+
+    def push(self, line):
+        if self._statement:
+            self._statement += '\n'
+        self._statement += line
 
     def filter(self, line):
         """Filter an input line to check for end-of-statement.
         """
-        return (line, False)
+        self.push(line)
+        return self
 
 class SQLCommand(Command):
     def filter(self, line):
@@ -20,10 +28,12 @@ class SQLCommand(Command):
         is *not* part of the statement
         """
         line = line.rstrip()
-        if line and line[-1] == ';':
-            return (line[:-1], True)
-        else:
-            return (line, False)
+        if line.endswith(';'):
+            line = line[:-1];
+            self._completed = True
+
+        self.push(line)
+        return self;
     
 class Dialect:
     """Base class for every dialect
