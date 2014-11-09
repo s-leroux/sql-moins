@@ -13,10 +13,10 @@ class ArgumentError(Exception):
         super(ArgumentError, self).__init__(message)
 
 
-class InternalDialect:
+class InternalDialect(Dialect):
     def __init__(self, commands, action):
+        super(InternalDialect,self).__init__(action)
         self._commands = commands
-        self._action = action
 
     def match(self, tokens):
         """Check if a list of tokens (``words'') match the current dialect.
@@ -25,9 +25,6 @@ class InternalDialect:
             return True
         
         return False
-
-    def do(self, statement):
-        return self._action(statement)
 
     def filter(self, line):
         """Filter an input line to check for end-of-statement.
