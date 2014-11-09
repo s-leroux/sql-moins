@@ -12,6 +12,7 @@ class TabularFormatter:
 
         data = []
         for row in result:
+            row = [item if item is not None else "(null)" for item in row]
             w = [max(i[0],len(str(i[1]))) for i in zip(w,row)]
             data.append(row)
 
