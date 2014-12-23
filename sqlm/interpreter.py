@@ -22,16 +22,30 @@ class InternalCommand(Command):
         self._completed = True
         return self
 
+
 class InternalDialect(Dialect):
+    """
+    The internal command language
+
+    Maps all commands to a method of the interpreter.
+    """
+    
     def __init__(self, commands, action):
         super(InternalDialect,self).__init__(action)
         self._commands = commands
 
     def match(self, tokens):
-        """Check if a list of tokens (``words'') match the current dialect.
+        """Check if a list of tokens match a known command
         """
-        if "".join(tokens[:1]).upper() in self._commands:
-            return InternalCommand(self._action)
+        tk = "".join(tokens[:1])
+        if tk[:1] == '@':
+            return InternalCommand(self._action, self._commands['@'])
+
+        tk = "".join(tokens[:1]).upper()
+        cmd = self._commands.get(tk)
+
+        if cmd:
+            return InternalCommand(self._action, cmd)
         
         return False
 
@@ -140,6 +154,9 @@ class Interpreter:
         self.formatter = TabularFormatter()
 
         self.commands = {
+                '@':     dict(action=self.doRunScript,
+                                usage="@script",
+                                desc="execute the commands from a script"),
                 'QUIT':     dict(action=self.doQuit,
                                 usage="quit",
                                 desc="quit the command line interpreter"),
@@ -200,12 +217,11 @@ class Interpreter:
         else:
             return 1
 
-    def eval(self, statement):
+    def eval(self, statement, cmd):
         statement = str(statement)
         args = statement.split() # XXX Maybe we should be smarter here (quotes?)
 
         if args: # Ignore blank lines
-            cmd = self.commands[args[0].upper()]
             try:
                 result = cmd['action'](statement, *args[1:])
                 if result:
@@ -213,6 +229,10 @@ class Interpreter:
             except ArgumentError as err:
                 print("Error: command", args[0], file=sys.stderr)
                 print("   ", err.args[0], file=sys.stderr)
+
+    def doRunScript(self, statement):
+        print("doRunScript")
+        print(statement)
 
     def doQuit(self, statement, *args):
         if len(args) > 0:

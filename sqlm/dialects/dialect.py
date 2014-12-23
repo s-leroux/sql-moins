@@ -1,13 +1,14 @@
 class Command:
     """Base class for every command
     """
-    def __init__(self, action):
+    def __init__(self, action, *params):
         self._action = action
+        self._params = params
         self._statement = ""
         self._completed = False
 
     def doIt(self):
-        return self._action(self._statement)
+        return self._action(self._statement, *self._params)
 
     def push(self, line):
         if self._statement:
