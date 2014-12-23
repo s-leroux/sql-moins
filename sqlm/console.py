@@ -42,15 +42,36 @@ if 'NLS_LANG' not in os.environ:
                                         encodings[encoding.upper()])
     print(os.environ['NLS_LANG'])
 
-class Console:
-    def run(self, interpreter, env):
-        quit = False
+class InputStream:
+    def readNextLine(self, prompt):
+        raise EOFError()
 
-        while not quit:
+class FileInputStream(InputStream):
+    def __init__(self, path):
+        self._file = open(path, 'rt')
+
+    def readNextLine(self, prompt):
+        line = f.readline()
+        if not f:
+            raise EOFError()
+
+        return line
+
+class ConsoleInputStream(InputStream):
+    def readNextLine(self, prompt):
+        return input(prompt)
+        
+
+class Console:
+    def __init__(self):
+        self._inputs = [ ConsoleInputStream() ]
+
+    def run(self, interpreter, env):
+        while self._inputs:
             try:
                 self.interact(interpreter)
             except EOFError:
-                quit = True
+                self._inputs.pop(0)
                 print()
             except Exception as err:
                 env.reportError(err)
@@ -59,7 +80,7 @@ class Console:
         prompt = 'SQL> '
         n = 1
         while True:
-            line = input(prompt)
+            line = self._inputs[0].readNextLine(prompt)
             if interpreter.push(line) == 0:
                 break
 
