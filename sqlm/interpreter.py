@@ -1,9 +1,13 @@
+import os
 import sys
 import re
+import shlex
+import subprocess
 from getpass import getpass
 import sqlalchemy
 import traceback
 
+from sqlm.console import FileInputStream
 from sqlm.formatter import TabularFormatter
 from sqlm.dialects import Dialects
 from sqlm.dialects.dialect import Dialect, Command
@@ -148,15 +152,22 @@ class Environment:
         print(err, file=sys.stderr)
 
 class Interpreter:
-    def __init__(self, env):
+    def __init__(self, console, env):
         self.engine = None
+        self.console = console
         self.environment = env
         self.formatter = TabularFormatter()
 
         self.commands = {
                 '@':     dict(action=self.doRunScript,
-                                usage="@script",
+                                usage="@path",
                                 desc="execute the commands from a script"),
+                'HISTORY':     dict(action=self.doHistory,
+                                usage="history",
+                                desc="Show the last commands stored into the buffer"),
+                'ED':     dict(action=self.doEdit,
+                                usage="ed path",
+                                desc="launch a text $EDITOR"),
                 'QUIT':     dict(action=self.doQuit,
                                 usage="quit",
                                 desc="quit the command line interpreter"),
@@ -170,12 +181,21 @@ class Interpreter:
                                 usage="set param value",
                                 desc="Change internal parameter"),
         }
+        self.history = []
         self.curr = None
         self.prev = None
         self._dialects = (InternalDialect(self.commands, self.eval),
                           Dialects[""](self.send),
                           PLDialect(self.send))
 
+    def shiftBuffer(self, new_value = None):
+        """
+        Push a new value in the buffer history
+        """
+        if self.prev is not None:
+            self.history.append(self.prev)
+
+        (self.prev, self.curr) = (self.curr, new_value)
 
     def push(self, line):
         """Push a command line into the buffer.
@@ -195,7 +215,7 @@ class Interpreter:
             # special case: if there is a pending command, terminate it
             # and execute
             if self.curr:
-                (self.prev, self.curr) = (self.curr, None)
+                self.shiftBuffer()
 
             if self.prev:
                 self.prev.doIt()
@@ -208,10 +228,10 @@ class Interpreter:
                 return 0
 
             stmt = Statement(self._dialects)
-            (self.prev, self.curr) = (self.curr, stmt)
+            self.shiftBuffer(stmt)
 
         if self.curr.push(line):
-            (self.prev, self.curr) = (self.curr, None)
+            self.shiftBuffer()
             self.prev.doIt()
             return 0
         else:
@@ -219,7 +239,8 @@ class Interpreter:
 
     def eval(self, statement, cmd):
         statement = str(statement)
-        args = statement.split() # XXX Maybe we should be smarter here (quotes?)
+        args = shlex.split(statement)
+        print(args)
 
         if args: # Ignore blank lines
             try:
@@ -230,9 +251,66 @@ class Interpreter:
                 print("Error: command", args[0], file=sys.stderr)
                 print("   ", err.args[0], file=sys.stderr)
 
-    def doRunScript(self, statement):
-        print("doRunScript")
-        print(statement)
+    #def getArgs(self, n, args):
+    #    return self.getArgs(n,n,args)
+
+    def getArgs(self, min, max, args):
+        if not (min <= len(args) <= max):
+            msg = str(min) + " to " + str(max) if min != max else str(min)
+            raise ArgumentError(msg + " required arguments")
+
+        return (args + (None,)*(max-min))[:max]
+
+    def doRunScript(self, statement, *args):
+        script = statement[1:].strip()
+        print("Running:", script)
+        input_stream = FileInputStream(script)
+        self.console.pushInputStream(input_stream)
+
+    def doEdit(self, statement, *args):
+        """
+        Launch an editor.
+
+        Without any argument, edit the last command in the buffer
+        in the file 'edbuf.sql'
+
+        With a number as argument, do the same as above, but
+        using the n-th value of the buffer
+
+        Otherwise, edit the given file
+        """
+        (path,) = self.getArgs(0, 1, args)
+
+        if not path:
+            # Edit the buffer in a special file
+            path = 'edbuf.sql'
+            with open(path, 'wt') as f:
+                f.write(str(self.history[-1]))
+                f.write('\n/\n')
+
+        elif re.match('^[0-9]+$', path):
+            n = int(path)
+            path = 'edbuf.sql'
+            with open(path, 'wt') as f:
+                f.write(str(self.history[n]))
+                f.write('\n/\n')
+            
+
+        editor = os.environ.get('EDITOR')
+        if not editor:
+            editor = 'vi'
+
+        print("Editing:", path, "with", editor)
+        subprocess.call([editor, path])
+
+    def doHistory(self, statement, *args):
+        self.getArgs(0, 0, args)
+
+        for idx, val in enumerate(self.history):
+            header = "{:4d}".format(idx)
+            for line in str(val).splitlines():
+                print("{}  {}".format(header,line))
+                header = "    "
 
     def doQuit(self, statement, *args):
         if len(args) > 0:

@@ -6,5 +6,5 @@ from sqlm.interpreter import Interpreter
 
 environment = Environment()
 console = Console()
-interpreter = Interpreter(environment)
+interpreter = Interpreter(console, environment)
 console.run(interpreter, environment)

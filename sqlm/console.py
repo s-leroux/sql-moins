@@ -51,8 +51,9 @@ class FileInputStream(InputStream):
         self._file = open(path, 'rt')
 
     def readNextLine(self, prompt):
-        line = f.readline()
-        if not f:
+        line = self._file.readline()
+        if not line:
+            self._file.close()
             raise EOFError()
 
         return line
@@ -66,6 +67,12 @@ class Console:
     def __init__(self):
         self._inputs = [ ConsoleInputStream() ]
 
+        try:
+            user_init = FileInputStream('sql-moins.sql')
+            self.pushInputStream(user_init)
+        except FileNotFoundError:
+            pass
+
     def run(self, interpreter, env):
         while self._inputs:
             try:
@@ -75,6 +82,9 @@ class Console:
                 print()
             except Exception as err:
                 env.reportError(err)
+
+    def pushInputStream(self, input_stream):
+        self._inputs.insert(0, input_stream)
 
     def interact(self, interpreter):
         prompt = 'SQL> '
