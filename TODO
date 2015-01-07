@@ -1,3 +1,3 @@
-IMPR    Handle gracefully ^C
 IMPR    Use logging facility through code
+BUG     CREATE\nTABLE is not recognized as a SQL command
 

@@ -197,6 +197,19 @@ class Interpreter:
 
         (self.prev, self.curr) = (self.curr, new_value)
 
+    def abort(self):
+        """Abort the current statement.
+
+        If the current statement is not empty, push in
+        onto the stack immediately without executing it.
+
+        If the current statement is empty or blank, do nothing.
+        """
+        if self.curr is not None and str(self.curr).strip():
+            self.shiftBuffer()
+
+
+
     def push(self, line):
         """Push a command line into the buffer.
 

@@ -89,11 +89,14 @@ class Console:
     def interact(self, interpreter):
         prompt = 'SQL> '
         n = 1
-        while True:
-            line = self._inputs[0].readNextLine(prompt)
-            if interpreter.push(line) == 0:
-                break
+        try:
+            while True:
+                line = self._inputs[0].readNextLine(prompt)
+                if interpreter.push(line) == 0:
+                    break
 
-            n += 1
-            prompt = '{:3d}  '.format(n)
+                n += 1
+                prompt = '{:3d}  '.format(n)
+        except KeyboardInterrupt:
+            interpreter.abort()
 
