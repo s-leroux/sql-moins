@@ -9,125 +9,10 @@ import traceback
 
 from sqlm.console import FileInputStream
 from sqlm.formatter import TabularFormatter
-from sqlm.dialects import Dialects
-from sqlm.dialects.dialect import Dialect, Command
 
 class ArgumentError(Exception):
     def __init__(self, message):
         super(ArgumentError, self).__init__(message)
-
-class InternalCommand(Command):
-    def filter(self, line):
-        """Filter an input line to check for end-of-statement.
-
-        Internal commands are one line only.
-        """
-        self.push(line)
-        self._completed = True
-        return self
-
-
-class InternalDialect(Dialect):
-    """
-    The internal command language
-
-    Maps all commands to a method of the interpreter.
-    """
-    
-    def __init__(self, commands, action):
-        super(InternalDialect,self).__init__(action)
-        self._commands = commands
-
-    def match(self, tokens):
-        """Check if a list of tokens match a known command
-        """
-        tk = "".join(tokens[:1])
-        if tk[:1] == '@':
-            return InternalCommand(self._action, self._commands['@'])
-
-        tk = "".join(tokens[:1]).upper()
-        cmd = self._commands.get(tk)
-
-        if cmd:
-            return InternalCommand(self._action, cmd)
-        
-        return False
-
-class PLCommand(Command):
-    pass
-
-class PLDialect(Dialect):
-    """``Match all'' dialect
-    """
-    def match(self, tokens):
-        """Check if a list of tokens (``words'') match the current dialect.
-        """
-        return PLCommand(self._action)
-
-class GenericCommand(Command):
-    def __init__(self, dialects):
-        super(GenericCommand,self).__init__(None)
-        self._dialects = dialects
-
-    def tokenize(self):
-        stmt = self._statement.rstrip()
-
-        # Remove trailing ';' for token parsing
-        # AFAICT the only legal use of a semi-colon at end-of-line
-        # is to end an SQL statement.
-        if stmt.endswith(';'):
-            stmt = stmt[:-1]
-
-        return stmt.split()
-
-    def filter(self, line):
-        self.push(line)
-        tokens = self.tokenize()
-        dialects = self._dialects
-
-        while dialects:
-            dialect, *dialects = dialects
-            cmd = dialect.match(tokens)
-            print(dialect, cmd)
-            if cmd:
-                return cmd.filter(self._statement)
-            elif cmd is None:
-                break
-
-        self._dialects = dialects
-        return self
-
-    def doIt(self):
-        tokens = self.tokenize()
-        for dialect in self.dialects:
-            cmd = dialect.match(tokens)
-            if cmd:
-                cmd = cmd.filter(self._statement)
-                return cmd.doIt()
-
-        return None
-        
-
-class Statement:
-    def __init__(self, dialects):
-        self._command = GenericCommand(dialects)
-        self._completed = False
-
-    def __str__(self):
-        return self._command._statement
-
-    def push(self, line):
-        if self._command._completed:
-            raise ValueError("Statement {} is completed. Can't add {}".format(
-                                self._statement,
-                                line))
-
-        self._command = self._command.filter(line)
-        # print(self._command)
-        return self._command._completed
-
-    def doIt(self):
-        return self._command.doIt()
 
 class Environment:
     def __init__(self):
@@ -135,7 +20,8 @@ class Environment:
             "DEBUG":    self.reportErrorDebug,
             "NORM":     self.reportErrorNorm,
         };
-        self.reportError = self.errorHandlers["NORM"]
+        self.errorLevel = "NORM"
+        self.reportError = self.errorHandlers[self.errorLevel]
 
     def setErrorLevel(self, level):
         handler = self.errorHandlers.get(level.upper())
@@ -151,12 +37,38 @@ class Environment:
     def reportErrorNorm(self, err):
         print(err, file=sys.stderr)
 
+class Command:
+    def __init__(self, action = None, desc = "", usage = "" , args = ()):
+        self.action = action
+        self.desc = desc
+        self.usage = usage
+        self.args = args
+
+    def doIt(self):
+        try:
+            return self.action(*self.args)
+        except:
+            print("Error:", self.desc)
+            print(self.usage)
+            raise
+    
+
 class Interpreter:
+    """
+    The Interpreter.
+
+    This object is responsible to assembly lines into statements.
+    If the first line of a statement start with a known internal
+    command it will be executed immediatly. Otherwise, a statement
+    is assembled and send to the server when the termination pattern
+    is detected.
+    """
     def __init__(self, console, env):
         self.engine = None
         self.console = console
         self.environment = env
         self.formatter = TabularFormatter()
+        self.termination = re.compile('^(.*)(?:;)$', re.DOTALL)
 
         self.commands = {
                 '@':     dict(action=self.doRunScript,
@@ -182,20 +94,21 @@ class Interpreter:
                                 desc="Change internal parameter"),
         }
         self.history = []
-        self.curr = None
-        self.prev = None
-        self._dialects = (InternalDialect(self.commands, self.eval),
-                          Dialects[""](self.send),
-                          PLDialect(self.send))
+        self.curr = "" # The current statement as a list of lines
 
-    def shiftBuffer(self, new_value = None):
-        """
-        Push a new value in the buffer history
-        """
-        if self.prev is not None:
-            self.history.append(self.prev)
+    def findCommand(self, stmt):
+        args = shlex.split(stmt)
+        if args and args[0]:
+            cmd = self.commands.get(args[0].upper())
+            if not cmd:
+                cmd = self.commands.get(args[0][0])
+                if cmd:
+                    args = (args[0][0], args[0][1:].strip()) + tuple(args[1:])
 
-        (self.prev, self.curr) = (self.curr, new_value)
+        if cmd:
+            return Command(args=args[1:], **cmd);
+
+        return None
 
     def abort(self):
         """Abort the current statement.
@@ -205,10 +118,9 @@ class Interpreter:
 
         If the current statement is empty or blank, do nothing.
         """
-        if self.curr is not None and str(self.curr).strip():
-            self.shiftBuffer()
-
-
+        if self.curr.strip():
+            self.history.append(self.curr)
+            self.curr = ""
 
     def push(self, line):
         """Push a command line into the buffer.
@@ -222,30 +134,45 @@ class Interpreter:
 
         Returns 0 if the command was executed
         """
+
+        # Remove trailing spaces
         line = line.rstrip()
-
-        if line.strip() == '/':
-            # special case: if there is a pending command, terminate it
-            # and execute
-            if self.curr:
-                self.shiftBuffer()
-
-            if self.prev:
-                self.prev.doIt()
-
-            return 0
 
         if not self.curr:
             # First line of a new statement
             if not line:
                 return 0
 
-            stmt = Statement(self._dialects)
-            self.shiftBuffer(stmt)
+            cmd = self.findCommand(line)
+            if cmd:
+                cmd.doIt()
+                self.curr = []
+                return 0
 
-        if self.curr.push(line):
-            self.shiftBuffer()
-            self.prev.doIt()
+        # Not the first line, or not an internal command
+        # add to the buffer and test for termination
+        self.curr = line if not self.curr else "\n".join((self.curr, line))
+
+        match = self.termination.match(self.curr)
+        execute = False
+
+        if match:
+            stmt = match.group(1)
+
+            # push non empty statement onto the stack
+            if stmt.strip():
+                self.history.append(stmt)
+
+            self.curr = ""
+            execute = True
+
+        # Special case
+        if line == '/':
+            execute = True
+
+        if execute:
+            self.send(self.history[-1])
+
             return 0
         else:
             return 1
@@ -274,13 +201,12 @@ class Interpreter:
 
         return (args + (None,)*(max-min))[:max]
 
-    def doRunScript(self, statement, *args):
-        script = statement[1:].strip()
+    def doRunScript(self, script):
         print("Running:", script)
         input_stream = FileInputStream(script)
         self.console.pushInputStream(input_stream)
 
-    def doEdit(self, statement, *args):
+    def doEdit(self, *args):
         """
         Launch an editor.
 
@@ -316,22 +242,17 @@ class Interpreter:
         print("Editing:", path, "with", editor)
         subprocess.call([editor, path])
 
-    def doHistory(self, statement, *args):
-        self.getArgs(0, 0, args)
-
+    def doHistory(self):
         for idx, val in enumerate(self.history):
             header = "{:4d}".format(idx)
             for line in str(val).splitlines():
                 print("{}  {}".format(header,line))
                 header = "    "
 
-    def doQuit(self, statement, *args):
-        if len(args) > 0:
-            raise ArgumentError("No argument required")
-
+    def doQuit(self):
         raise EOFError
 
-    def doHelp(self, statement, *args):
+    def doHelp(self, *args):
         def showCommandHelp(cmd):
             usage = self.commands[cmd].get('usage','')
             desc = self.commands[cmd].get('desc','')
@@ -350,17 +271,16 @@ class Interpreter:
         for cmd in self.commands:
             showCommandHelp(cmd)
 
-    def doSet(self, statement, *args):
-        if len(args) != 2:
-            raise ArgumentError("2 arguments required")
+    def doSet(self, attr, value):
+        attr = attr.upper()
 
-        if args[0].upper() == "ERRORLEVEL":
-            self.environment.setErrorLevel(args[1].upper())
+        if attr == "ERRORLEVEL":
+            self.environment.setErrorLevel(value.upper())
         else:
-            raise ArgumentError("Invalid parameter: "+args[0])
+            raise ArgumentError("Invalid parameter: "+attr)
         
 
-    def doConnect(self, statement, *args):
+    def doConnect(self, url):
         """Establish a connection to the database
 
         ``url`` is assumed to be a valid sqlalchemy connection URL
@@ -368,11 +288,7 @@ class Interpreter:
 
         If the password is missing, request it from the console
         """
-
-        if len(args) != 1:
-            raise ArgumentError("Usage: connect url")
-
-        purl = re.split('(:|@)', args[0])
+        purl = re.split('(:|@)', url)
         #                ^^^^^
         #            is this correct?
 
@@ -385,10 +301,8 @@ class Interpreter:
             purl = purl[:3] + [':', passwd] + purl[3:]
 
         self.engine = sqlalchemy.create_engine("".join(purl))
-
-        self._dialects = (InternalDialect(self.commands, self.eval),
-                          Dialects[purl[0].upper()](self.send),
-                          PLDialect(self.send))
+        if not self.engine:
+            raise ArgumentError("Can't connect (wrong password?)")
 
         return self.engine
 
