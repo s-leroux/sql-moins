@@ -23,12 +23,29 @@ class Environment:
         self.errorLevel = "NORM"
         self.reportError = self.errorHandlers[self.errorLevel]
 
+        self.terminations = {
+            ";":        re.compile(r'^(.*);$', re.DOTALL),
+            "/":        re.compile(r'^(.*)\n/$', re.DOTALL)
+        }
+        self.termination = self.terminations[";"]
+
+    def __setitem__(self, i, v):
+        if i == "ERRORLEVEL":
+            self.setErrorLevel(v.upper())
+        elif i == "TERMINATION":
+            self.setTermination(v.upper())
+        else:
+            raise ArgumentError("Unknown parameter " + i)
+
     def setErrorLevel(self, level):
         handler = self.errorHandlers.get(level.upper())
         if handler:
             self.reportError = handler
         else:
             raise("Invalid error level: " + level)
+
+    def setTermination(self, term):
+        self.termination = self.terminations[term]
 
     def reportErrorDebug(self,err):
         print(err, file=sys.stderr)
@@ -47,7 +64,7 @@ class Command:
     def doIt(self):
         try:
             return self.action(*self.args)
-        except:
+        except ArgumentError as err:
             print("Error:", self.desc)
             print(self.usage)
             raise
@@ -68,7 +85,6 @@ class Interpreter:
         self.console = console
         self.environment = env
         self.formatter = TabularFormatter()
-        self.termination = re.compile('^(.*)(?:;)$', re.DOTALL)
 
         self.commands = {
                 '@':     dict(action=self.doRunScript,
@@ -149,26 +165,33 @@ class Interpreter:
                 self.curr = []
                 return 0
 
-        # Not the first line, or not an internal command
-        # add to the buffer and test for termination
-        self.curr = line if not self.curr else "\n".join((self.curr, line))
-
-        match = self.termination.match(self.curr)
         execute = False
-
-        if match:
-            stmt = match.group(1)
-
-            # push non empty statement onto the stack
-            if stmt.strip():
-                self.history.append(stmt)
-
-            self.curr = ""
-            execute = True
-
         # Special case
         if line == '/':
+            if self.curr:
+                self.history.append(self.curr)
+                self.curr = ""
+
             execute = True
+
+        else:
+
+            # Not the first line, or not an internal command
+            # add to the buffer and test for termination
+            self.curr = line if not self.curr else "\n".join((self.curr, line))
+
+            match = self.environment.termination.match(self.curr)
+
+            if match:
+                stmt = match.group(1)
+
+                # push non empty statement onto the stack
+                if stmt.strip():
+                    self.history.append(stmt)
+
+                self.curr = ""
+                execute = True
+
 
         if execute:
             self.send(self.history[-1])
@@ -272,13 +295,7 @@ class Interpreter:
             showCommandHelp(cmd)
 
     def doSet(self, attr, value):
-        attr = attr.upper()
-
-        if attr == "ERRORLEVEL":
-            self.environment.setErrorLevel(value.upper())
-        else:
-            raise ArgumentError("Invalid parameter: "+attr)
-        
+        self.environment[attr.upper()] = value
 
     def doConnect(self, url):
         """Establish a connection to the database
