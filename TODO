@@ -1,5 +1,5 @@
 IMPR    Use logging facility through code
 IMPR    Inline help should use `pydoc.help`
-BUG     Should report wrong password immediatly at connection time
+IMPR    Should be able to disable autocommit
 BUG     Scripts should abort (by default?) in case of error
 

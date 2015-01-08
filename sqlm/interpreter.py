@@ -82,6 +82,7 @@ class Interpreter:
     """
     def __init__(self, console, env):
         self.engine = None
+        self.connection = None
         self.console = console
         self.environment = env
         self.formatter = TabularFormatter()
@@ -318,10 +319,12 @@ class Interpreter:
             purl = purl[:3] + [':', passwd] + purl[3:]
 
         self.engine = sqlalchemy.create_engine("".join(purl))
-        if not self.engine:
+        self.connection = self.engine.connect()
+
+        if not self.connection:
             raise ArgumentError("Can't connect (wrong password?)")
 
-        return self.engine
+        return self.connection
 
     def display(self, result, tagline = None):
         if result.returns_rows:
@@ -334,7 +337,7 @@ class Interpreter:
 
     def send(self, statement, tagline = "\n{n:d} {rows}.\n"):
         statement = str(statement)
-        result = self.engine.execute(statement)
+        result = self.connection.execute(statement)
         if result:
             self.display(result, tagline)
         
