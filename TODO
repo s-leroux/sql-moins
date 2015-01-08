@@ -1,3 +1,5 @@
 IMPR    Use logging facility through code
-BUG     CREATE\nTABLE is not recognized as a SQL command
+IMPR    Inline help should use `pydoc.help`
+BUG     Should report wrong password immediatly at connection time
+BUG     Scripts should abort (by default?) in case of error
 
