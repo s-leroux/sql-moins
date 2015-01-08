@@ -46,17 +46,35 @@ class InputStream:
     def readNextLine(self, prompt):
         raise EOFError()
 
+    def abort(self):
+        """Give up using this input stream.
+
+        Should close any ressource still allocated by this stream.
+        Returns 1 if the stream is closed.
+        Returns 0 if the stream cannot be closed
+        """
+        return 1
+
 class FileInputStream(InputStream):
     def __init__(self, path):
+        self._path = path
+        self._linenum = 0
         self._file = open(path, 'rt')
 
     def readNextLine(self, prompt):
         line = self._file.readline()
+        self._linenum += 1
+
         if not line:
             self._file.close()
             raise EOFError()
 
         return line
+
+    def abort(self):
+        print("Aborting",self._path,"on line",self._linenum, file=sys.stderr)
+        self._file.close()
+        return 1
 
 class ConsoleInputStream(InputStream):
     def readNextLine(self, prompt):
@@ -65,11 +83,16 @@ class ConsoleInputStream(InputStream):
         except KeyboardInterrupt:
             print("^C") # echo the ^C
             raise
+
+    def abort(self):
+        # Never close interactive console
+        return 0
         
 
 class Console:
-    def __init__(self):
-        self._inputs = [ ConsoleInputStream() ]
+    def __init__(self, initial_env):
+        self.environment = initial_env
+        self.environment.input_stream = ConsoleInputStream()
 
         try:
             user_init = FileInputStream('sql-moins.sql')
@@ -77,26 +100,32 @@ class Console:
         except FileNotFoundError:
             pass
 
-    def run(self, interpreter, env):
-        while self._inputs:
+    def run(self, interpreter):
+
+        while self.environment:
             try:
                 self.interact(interpreter)
             except EOFError:
-                self._inputs.pop(0)
+                self.environment = self.environment.pop()
                 print()
             except Exception as err:
-                env.reportError(err)
+                self.environment.reportError(err)
+
+                while self.environment.input_stream.abort():
+                    self.environment = self.environment.pop()
+
 
     def pushInputStream(self, input_stream):
-        self._inputs.insert(0, input_stream)
+        self.environment = self.environment.push()
+        self.environment.input_stream = input_stream
 
     def interact(self, interpreter):
         prompt = 'SQL> '
         n = 1
         try:
             while True:
-                line = self._inputs[0].readNextLine(prompt)
-                if interpreter.push(line) == 0:
+                line = self.environment.input_stream.readNextLine(prompt)
+                if interpreter.push(self.environment, line) == 0:
                     break
 
                 n += 1

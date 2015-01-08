@@ -4,6 +4,7 @@ import re
 import shlex
 import subprocess
 from getpass import getpass
+from copy import copy
 import sqlalchemy
 import traceback
 
@@ -16,6 +17,8 @@ class ArgumentError(Exception):
 
 class Environment:
     def __init__(self):
+        self.next = None # for linked list of environments
+
         self.errorHandlers = {
             "DEBUG":    self.reportErrorDebug,
             "NORM":     self.reportErrorNorm,
@@ -28,6 +31,14 @@ class Environment:
             "/":        re.compile(r'^(.*)\n/$', re.DOTALL)
         }
         self.termination = self.terminations[";"]
+
+    def push(self):
+        c = copy(self)
+        c.next = self
+        return c
+
+    def pop(self):
+        return self.next
 
     def __setitem__(self, i, v):
         if i == "ERRORLEVEL":
@@ -61,9 +72,9 @@ class Command:
         self.usage = usage
         self.args = args
 
-    def doIt(self):
+    def doIt(self, env):
         try:
-            return self.action(*self.args)
+            return self.action(env, *self.args)
         except ArgumentError as err:
             print("Error:", self.desc)
             print(self.usage)
@@ -80,11 +91,10 @@ class Interpreter:
     is assembled and send to the server when the termination pattern
     is detected.
     """
-    def __init__(self, console, env):
+    def __init__(self, console):
         self.engine = None
         self.connection = None
         self.console = console
-        self.environment = env
         self.formatter = TabularFormatter()
 
         self.commands = {
@@ -139,7 +149,7 @@ class Interpreter:
             self.history.append(self.curr)
             self.curr = ""
 
-    def push(self, line):
+    def push(self, env, line):
         """Push a command line into the buffer.
 
         Will trigger execution if:
@@ -162,7 +172,7 @@ class Interpreter:
 
             cmd = self.findCommand(line)
             if cmd:
-                cmd.doIt()
+                cmd.doIt(env)
                 self.curr = ""
                 return 0
 
@@ -181,7 +191,7 @@ class Interpreter:
             # add to the buffer and test for termination
             self.curr = line if not self.curr else "\n".join((self.curr, line))
 
-            match = self.environment.termination.match(self.curr)
+            match = env.termination.match(self.curr)
 
             if match:
                 stmt = match.group(1)
@@ -195,7 +205,7 @@ class Interpreter:
 
 
         if execute:
-            self.send(self.history[-1])
+            self.send(env, self.history[-1])
 
             return 0
         else:
@@ -225,12 +235,12 @@ class Interpreter:
 
         return (args + (None,)*(max-min))[:max]
 
-    def doRunScript(self, script):
+    def doRunScript(self, env, script):
         print("Running:", script)
         input_stream = FileInputStream(script)
         self.console.pushInputStream(input_stream)
 
-    def doEdit(self, *args):
+    def doEdit(self, env, *args):
         """
         Launch an editor.
 
@@ -266,17 +276,17 @@ class Interpreter:
         print("Editing:", path, "with", editor)
         subprocess.call([editor, path])
 
-    def doHistory(self):
+    def doHistory(self, env):
         for idx, val in enumerate(self.history):
             header = "{:4d}".format(idx)
             for line in str(val).splitlines():
                 print("{}  {}".format(header,line))
                 header = "    "
 
-    def doQuit(self):
+    def doQuit(self, env):
         raise EOFError
 
-    def doHelp(self, *args):
+    def doHelp(self, env, *args):
         def showCommandHelp(cmd):
             usage = self.commands[cmd].get('usage','')
             desc = self.commands[cmd].get('desc','')
@@ -295,10 +305,10 @@ class Interpreter:
         for cmd in self.commands:
             showCommandHelp(cmd)
 
-    def doSet(self, attr, value):
+    def doSet(self, env, attr, value):
         self.environment[attr.upper()] = value
 
-    def doConnect(self, url):
+    def doConnect(self, env, url):
         """Establish a connection to the database
 
         ``url`` is assumed to be a valid sqlalchemy connection URL
@@ -326,18 +336,18 @@ class Interpreter:
 
         return self.connection
 
-    def display(self, result, tagline = None):
+    def display(self, env, result, tagline = None):
         if result.returns_rows:
-            self.formatter.display(self.environment, result)
+            self.formatter.display(env, result)
 
         rowcount = result.rowcount
         if tagline and rowcount >= 0:
             print(tagline.format(n=rowcount,
                                  rows="rows" if rowcount > 1 else "row"))
 
-    def send(self, statement, tagline = "\n{n:d} {rows}.\n"):
+    def send(self, env, statement, tagline = "\n{n:d} {rows}.\n"):
         statement = str(statement)
         result = self.connection.execute(statement)
         if result:
-            self.display(result, tagline)
+            self.display(env, result, tagline)
         
