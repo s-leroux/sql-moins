@@ -332,7 +332,7 @@ class Interpreter:
             print(tagline.format(n=rowcount,
                                  rows="rows" if rowcount > 1 else "row"))
 
-    def send(self, statement, tagline = None):
+    def send(self, statement, tagline = "\n{n:d} {rows}.\n"):
         statement = str(statement)
         result = self.engine.execute(statement)
         if result:
