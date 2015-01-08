@@ -1,5 +1,4 @@
 IMPR    Use logging facility through code
 IMPR    Inline help should use `pydoc.help`
 IMPR    Should be able to disable autocommit
-IMPR    Allow to resent an arbitrary command from the buffer history
 

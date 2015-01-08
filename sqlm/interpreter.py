@@ -98,6 +98,9 @@ class Interpreter:
         self.formatter = TabularFormatter()
 
         self.commands = {
+                '!':     dict(action=self.doRunPrevious,
+                                usage="!num",
+                                desc="execute a command from the buffer history"),
                 '@':     dict(action=self.doRunScript,
                                 usage="@path",
                                 desc="execute the commands from a script"),
@@ -234,6 +237,10 @@ class Interpreter:
             raise ArgumentError(msg + " required arguments")
 
         return (args + (None,)*(max-min))[:max]
+
+    def doRunPrevious(self, env, num):
+        num = int(num)
+        self.send(env, self.history[num])
 
     def doRunScript(self, env, script):
         print("Running:", script)
