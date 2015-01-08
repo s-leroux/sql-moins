@@ -1,4 +1,3 @@
 IMPR    Use logging facility through code
 IMPR    Inline help should use `pydoc.help`
 IMPR    Should be able to disable autocommit
-IMPR    Support for multiple event selectors in `!<num>` and `@<num>`

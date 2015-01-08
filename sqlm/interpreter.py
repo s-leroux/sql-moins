@@ -10,6 +10,7 @@ import traceback
 
 from sqlm.console import FileInputStream
 from sqlm.formatter import TabularFormatter
+from sqlm.utils import numSelector
 
 class ArgumentError(Exception):
     def __init__(self, message):
@@ -238,9 +239,9 @@ class Interpreter:
 
         return (args + (None,)*(max-min))[:max]
 
-    def doRunPrevious(self, env, num):
-        num = int(num)
-        self.send(env, self.history[num])
+    def doRunPrevious(self, env, *expr):
+        for num in numSelector(expr):
+            self.send(env, self.history[num])
 
     def doRunScript(self, env, script):
         print("Running:", script)
@@ -251,6 +252,9 @@ class Interpreter:
         """
         Launch an editor.
 
+        Usage:
+            ed [filename]? [n|n1-n2]*
+
         Without any argument, edit the last command in the buffer
         in the file 'edbuf.sql'
 
@@ -259,22 +263,22 @@ class Interpreter:
 
         Otherwise, edit the given file
         """
-        (path,) = self.getArgs(0, 1, args)
 
-        if not path:
-            # Edit the buffer in a special file
-            path = 'edbuf.sql'
-            with open(path, 'wt') as f:
-                f.write(str(self.history[-1]))
-                f.write('\n/\n')
+        # Set default values
+        path = 'edbuf.sql'
+        sel = (-1,)
 
-        elif re.match('^[0-9]+$', path):
-            n = int(path)
-            path = 'edbuf.sql'
-            with open(path, 'wt') as f:
+        if len(args):
+            if re.match(r"^[-+]?\d+(-[-+]?\d+)?$", args[0]):
+                sel = args
+            else:
+                path = args[0]
+                sel = args[1:] or (-1,)
+
+        with open(path, 'wt') as f:
+            for n in numSelector(sel):
                 f.write(str(self.history[n]))
                 f.write('\n/\n')
-            
 
         editor = os.environ.get('EDITOR')
         if not editor:
