@@ -163,7 +163,7 @@ class Interpreter:
             cmd = self.findCommand(line)
             if cmd:
                 cmd.doIt()
-                self.curr = []
+                self.curr = ""
                 return 0
 
         execute = False

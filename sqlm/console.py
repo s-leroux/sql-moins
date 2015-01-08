@@ -60,7 +60,11 @@ class FileInputStream(InputStream):
 
 class ConsoleInputStream(InputStream):
     def readNextLine(self, prompt):
-        return input(prompt)
+        try:
+            return input(prompt)
+        except KeyboardInterrupt:
+            print("^C") # echo the ^C
+            raise
         
 
 class Console:
