@@ -2,11 +2,11 @@ import functools
 
 class TabularFormatter:
     def display(self, env, result):
-        print(result.keys())
+        # print(result.keys())
         
         # See http://legacy.python.org/dev/peps/pep-0249/#cursor-attributes
         # for cursor.description fields
-        print([item for item in result.cursor.description])
+        # print([item for item in result.cursor.description])
         keys = result.keys()
         w = [len(str(item)) for item in keys]
 
