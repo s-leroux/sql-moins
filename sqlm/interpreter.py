@@ -8,6 +8,8 @@ from copy import copy
 import sqlalchemy
 import traceback
 
+from sqlm.dialects.oracle import OracleDialect
+from sqlm.tabular import Reader
 from sqlm.console import FileInputStream
 from sqlm.formatter import TabularFormatter
 from sqlm.utils import numSelector
@@ -108,6 +110,9 @@ class Interpreter:
                 'HISTORY':     dict(action=self.doHistory,
                                 usage="history",
                                 desc="Show the last commands stored into the buffer"),
+                'READ':     dict(action=self.doRead,
+                                usage="read table_name",
+                                desc="Read tabular data to create a table"),
                 'ED':     dict(action=self.doEdit,
                                 usage="ed path",
                                 desc="launch a text $EDITOR"),
@@ -248,6 +253,13 @@ class Interpreter:
         input_stream = FileInputStream(script)
         self.console.pushInputStream(input_stream)
 
+    def doRead(self, env, tbl):
+        r = Reader()
+        columns, rows = r.parse(sys.stdin)
+
+        self.history.append(self.dialect.makeCreateTable(tbl, columns, rows))
+        self.history.append(self.dialect.makeInserts(tbl, columns, rows))
+
     def doEdit(self, env, *args):
         """
         Launch an editor.
@@ -339,8 +351,19 @@ class Interpreter:
             passwd = getpass()
             purl = purl[:3] + [':', passwd] + purl[3:]
 
-        self.engine = sqlalchemy.create_engine("".join(purl))
-        self.connection = self.engine.connect()
+        the_engine = sqlalchemy.create_engine("".join(purl))
+        the_connection = the_engine.connect()
+
+        # new connection OK: update the member data
+        self.dialect_name = re.split(r'[+:]', url, 1)[0]
+        if self.dialect_name == 'oracle':
+            self.dialect = OracleDialect()
+        else:
+            self.dialect = OracleDialect() # XXX Should use Generic Dialect
+
+        self.engine = the_engine
+        self.connection = the_connection
+
 
         if not self.connection:
             raise ArgumentError("Can't connect (wrong password?)")
