@@ -1,3 +1,7 @@
 IMPR    Use logging facility through code
 IMPR    Inline help should use `pydoc.help`
 IMPR    Should be able to disable autocommit
+IMPR    Read tabulated data (CVS/tab-separated/etc.)
+QLTY    Review the REPL engine (read line -> read statement -> execute -> print)
+IMPR    Support alternate output format
+IMPR    Support spooling
