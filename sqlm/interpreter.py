@@ -108,7 +108,7 @@ class Interpreter:
                                 usage="@path",
                                 desc="execute the commands from a script"),
                 'HISTORY':     dict(action=self.doHistory,
-                                usage="history",
+                                usage="history [n]",
                                 desc="Show the last commands stored into the buffer"),
                 'READ':     dict(action=self.doRead,
                                 usage="read table_name",
@@ -299,9 +299,19 @@ class Interpreter:
         print("Editing:", path, "with", editor)
         subprocess.call([editor, path])
 
-    def doHistory(self, env):
-        for idx, val in enumerate(self.history):
-            header = "{:4d}".format(idx)
+    def doHistory(self, env, *args):
+        n, = self.getArgs(0, 1, args)
+
+        if n is not None:
+            n = int(n)
+            if n <= 0:
+                raise ArgumentError("Expected a non nul positive integer")
+        else:
+            n = len(self.history)-1
+
+        base_idx = max(len(self.history)-n,0)
+        for idx, val in enumerate(self.history[base_idx:]):
+            header = "{:4d}".format(idx+base_idx)
             for line in str(val).splitlines():
                 print("{}  {}".format(header,line))
                 header = "    "
