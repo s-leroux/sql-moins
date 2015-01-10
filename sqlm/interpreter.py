@@ -260,6 +260,8 @@ class Interpreter:
         self.history.append(self.dialect.makeCreateTable(tbl, columns, rows))
         self.history.append(self.dialect.makeInserts(tbl, columns, rows))
 
+        self.doHistory(env, 2)
+
     def doEdit(self, env, *args):
         """
         Launch an editor.
