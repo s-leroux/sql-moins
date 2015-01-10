@@ -35,6 +35,8 @@ class Environment:
         }
         self.termination = self.terminations[";"]
 
+        self.autocommit = True
+
     def push(self):
         c = copy(self)
         c.next = self
@@ -48,6 +50,13 @@ class Environment:
             self.setErrorLevel(v.upper())
         elif i == "TERMINATION":
             self.setTermination(v.upper())
+        elif i == "AUTOCOMMIT":
+            if v.upper() in ("TRUE", "ON", "1"):
+                self.autocommit = True
+            elif v.upper() in ("FALSE", "OFF", "0"):
+                self.autocommit = False
+            else:
+                raise ArgumentError("Not a valid option for AUTOCOMMIT " + v)
         else:
             raise ArgumentError("Unknown parameter " + i)
 
@@ -401,7 +410,9 @@ class Interpreter:
 
     def send(self, env, statement, tagline = "\n{n:d} {rows}.\n"):
         statement = str(statement)
-        result = self.connection.execute(statement)
+        result = self.connection \
+                        .execution_options(autocommit=env.autocommit) \
+                        .execute(statement)
         if result:
             self.display(env, result, tagline)
         
