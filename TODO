@@ -1,13 +1,12 @@
 IMPR    Use logging facility through code
 IMPR    Inline help should use `pydoc.help`
 IMPR    Should be able to disable autocommit
-IMPR    Read tabulated data (CVS/tab-separated/etc.)
 QLTY    Review the REPL engine (read line -> read statement -> execute -> print)
 IMPR    Support alternate output format
 IMPR    Support spooling
 BUG     Align numbers on the decimal point in tabular output
 IMPR    Add date/timestamp detection when reading tabular data
-IMPR    Support for heredoc / eof sign when reading tabular data
 IMPR    Implement a generic dialect
 BUG     Oracle dialect does not handle correctly NULL when generating INSERT
         statements
+BUG     `!` should be used for shell commands -- not history

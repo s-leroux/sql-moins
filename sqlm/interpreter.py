@@ -255,7 +255,7 @@ class Interpreter:
 
     def doRead(self, env, tbl):
         r = Reader()
-        columns, rows = r.parse(sys.stdin)
+        columns, rows = r.parse(env.input_stream.reader('> ', '.'))
 
         self.history.append(self.dialect.makeCreateTable(tbl, columns, rows))
         self.history.append(self.dialect.makeInserts(tbl, columns, rows))
@@ -272,27 +272,35 @@ class Interpreter:
         Without any argument, edit the last command in the buffer
         in the file 'edbuf.sql'
 
-        With a number as argument, do the same as above, but
-        using the n-th value of the buffer
+        With a filename, edit the given file
 
-        Otherwise, edit the given file
+        With at least one buffer index, *overwrite* the content
+        of the file with the given entries in the history buffer.
         """
 
         # Set default values
         path = 'edbuf.sql'
-        sel = (-1,)
 
+        # If there is *no* argument at all, 
+        # assume we are editing the last buffer entry
+        if not len(args):
+            args = ("-1",)
+        # If the first argument is non-numeric, it is a filename
+        elif not re.match(r"^[-+]?\d+(-[-+]?\d+)?$", args[0]):
+            path = args[0]
+            args = args[1:]
+
+        # Remaining arguments are assumed to be selectors in the buffer
+        # OVERWRITE the content of the file with that
         if len(args):
-            if re.match(r"^[-+]?\d+(-[-+]?\d+)?$", args[0]):
-                sel = args
-            else:
-                path = args[0]
-                sel = args[1:] or (-1,)
-
-        with open(path, 'wt') as f:
-            for n in numSelector(sel):
-                f.write(str(self.history[n]))
-                f.write('\n/\n')
+            sel = list(numSelector(args)) # materilize the list first
+                                          # to avoid partial overwrite
+                                          # of the file in case of
+                                          # incorrectly formated arguments
+            with open(path, 'wt') as f:
+                for n in sel:
+                    f.write(str(self.history[n]))
+                    f.write('\n/\n')
 
         editor = os.environ.get('EDITOR')
         if not editor:
@@ -341,7 +349,7 @@ class Interpreter:
             showCommandHelp(cmd)
 
     def doSet(self, env, attr, value):
-        self.environment[attr.upper()] = value
+        env[attr.upper()] = value
 
     def doConnect(self, env, url):
         """Establish a connection to the database

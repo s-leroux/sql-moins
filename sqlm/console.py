@@ -55,6 +55,22 @@ class InputStream:
         """
         return 1
 
+    def reader(self, prompt= '', eof=None):
+        """
+        Return an iterator that read the current
+        input stream displaying the given prompt on each line
+        """
+        try:
+            while True:
+                line = self.readNextLine(prompt)
+                if line != eof:
+                    yield line
+                else:
+                    break
+        except EOFError:
+            pass
+        
+
 class FileInputStream(InputStream):
     def __init__(self, path):
         self._path = path
