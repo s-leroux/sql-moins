@@ -10,3 +10,4 @@ IMPR    Implement a generic dialect
 BUG     Oracle dialect does not handle correctly NULL when generating INSERT
         statements
 BUG     `!` should be used for shell commands -- not history
+BUG     Where are the tests ?!?
