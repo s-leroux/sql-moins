@@ -28,9 +28,11 @@ class Reader:
         for sep in _SEP:
             columns = sep.split(firstLine)
             if len(columns) > 1:
-                return self.parseData(columns, data, sep)
+                break
 
-        raise ValueError("Can't identify the separator")
+        return self.parseData(columns, data, sep)
+        # the above code assume the fallback-case is the last of the list
+        # raise ValueError("Can't identify the separator")
 
     def parseData(self, columns, data, sep):
         result = []
