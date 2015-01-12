@@ -1,6 +1,6 @@
 import re
 
-_RD_IGNORE = re.compile(r'(\s+)|(\s*[-+=#]+\s*)')
+_RD_IGNORE = re.compile(r'^(#.*)|(\s+)|(\s*[-+=#]+\s*)$')
 
 
 _RD_PIPE_SEP =        re.compile(r'\s+[|]\s+')

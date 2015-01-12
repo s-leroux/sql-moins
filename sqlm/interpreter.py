@@ -262,9 +262,26 @@ class Interpreter:
         input_stream = FileInputStream(script)
         self.console.pushInputStream(input_stream)
 
-    def doRead(self, env, tbl):
-        r = Reader()
-        columns, rows = r.parse(env.input_stream.reader('> ', '.'))
+    def doRead(self, env, tbl, *args):
+        op1, data1, op2, data2 = self.getArgs(0,4, args)
+        src = None
+        here = '.'
+
+        try:
+            if op1 == '<':
+                src = open(data1, "rt")
+                op1 = op2
+                data1 = data2
+
+            if op1 == '<<':
+                here = data1
+
+            r = Reader()
+            columns, rows = r.parse(src if src
+                                    else env.input_stream.reader('> ', here))
+        finally:
+            if src:
+                src.close()
 
         self.history.append(self.dialect.makeCreateTable(tbl, columns, rows))
         self.history.append(self.dialect.makeInserts(tbl, columns, rows))
