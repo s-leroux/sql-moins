@@ -1,6 +1,6 @@
 import unittest
 
-from sqlm.formatter import Column, make_columns
+from sqlm.formatter import *
 
 class PEP249:
     # Dummy PEP-249 type objects
@@ -33,15 +33,17 @@ class ColumnTestCase(unittest.TestCase):
         col = Column(*PEP249_VARCHAR_20)
         self.assertEqual(col.name, 'V')
         self.assertEqual(col.type_code, 'STRING')
+        self.assertFalse(col.isNumber())
         self.assertEqual(col.align, '<')
         self.assertEqual(col.display_size, 20)
-        self.assertEqual(col.get_format(), '{!s:<20}')
+        self.assertEqual(col.getFormat(), '{!s:<20}')
         self.assertEqual(col.blank(), 20*'-')
 
     def test_NUMBER_column(self):
         col = Column(*PEP249_NUMBER_10)
         self.assertEqual(col.name, 'N')
         self.assertEqual(col.type_code, 'NUMBER')
+        self.assertTrue(col.isNumber())
         self.assertEqual(col.align, '>')
         self.assertEqual(col.display_size, 11) # 10 + 1 for sign
         self.assertEqual(col.blank('*'), 11*'*')
@@ -50,6 +52,7 @@ class ColumnTestCase(unittest.TestCase):
         col = Column(*PEP249_NUMBER_14_2)
         self.assertEqual(col.name, 'D')
         self.assertEqual(col.type_code, 'NUMBER')
+        self.assertTrue(col.isNumber())
         self.assertEqual(col.align, '>')
         self.assertEqual(col.display_size, 18) # 14 + 1 for sign 
                                                #    + 1 for dot 
@@ -65,4 +68,30 @@ class ColumnTestCase(unittest.TestCase):
         self.assertEqual(len(cd), len(cl))
         self.assertEqual(cl[0].name, cd[0][0])
         self.assertEqual(cl[1].name, cd[1][0])
+
+class PageTestCase(unittest.TestCase):
+    def test_page(self):
+        colA = Column(*PEP249_NUMBER_10)
+        colB = Column(*PEP249_NUMBER_10)
+        colC = Column(*PEP249_VARCHAR_20)
+
+        page = Page([colA,colB, colC])
+
+        self.assertIs(page.columns[0], colA)
+        self.assertIs(page.columns[1], colB)
+        self.assertIs(page.columns[2], colC)
+
+        rows = [['1.3', '1.5', 'a'],
+                ['101', '1.4', 'abc'],
+                ['.33', '2.5', 'ab']]
+
+        for row in rows:
+            page.append(row)
+
+        self.assertEqual(page.rows[0], rows[0])
+        self.assertEqual(page.rows[1], rows[1])
+        self.assertEqual(page.rows[2], rows[2])
+
+        self.assertEqual(page.formats(), ['+999.99', '+9.9', 'XXX'])
+
 

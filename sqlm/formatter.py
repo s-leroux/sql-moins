@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from decimal import Decimal
 import functools
 
 class Column(SimpleNamespace):
@@ -24,9 +25,12 @@ class Column(SimpleNamespace):
                                        # case here ?
 
         # Computed values
-        self.align = '>' if self.type_code in ('NUMBER') else '<'
+        self.align = '>' if self.isNumber() else '<'
 
-    def get_format(self):
+    def isNumber(self):
+        return self.type_code in ('NUMBER')
+
+    def getFormat(self):
         """Return the format used to display that column properly
         """
         return "{{!s:{align}{display_size}}}".format(**self.__dict__)
@@ -37,6 +41,71 @@ class Column(SimpleNamespace):
         This could be used to generate place-holders and/or separators.
         """
         return (pattern*self.display_size)[0:self.display_size]
+
+class Page:
+    """
+    A page of data.
+
+    Serves as a cache for data and to adjust format according to the
+    actual values.
+
+        -1235.67
+            1.5
+          240
+        ^      ^
+        |      | display_width
+             ^
+             |   ref pos
+        ^   ^
+        |   |    left part (right aligned)
+              ^^
+              || right part (left aligned)
+
+    """
+
+    def __init__(self, columns, null='NULL'):
+        self.rows = []
+        self.null = null
+        self.columns = columns[:]
+
+    def append(self, row):
+        self.rows.append(row)
+                
+    def formats(self):
+        result = [ ]
+
+        for c, values in zip(self.columns, [i for i in zip(*self.rows)]):
+            if c.isNumber():
+                left = right = 0
+                hasNull = False
+                for value in values:
+                    if value is None:
+                        hasNull = True
+                    else:
+                        sign, digits, exponent = Decimal(value).as_tuple()
+
+                        if right < -exponent:
+                            right = -exponent
+                        if left < max(0,len(digits) + exponent):
+                            left = max(0,len(digits) + exponent)
+
+                fmt = '+'+'9'*left + '.' + '9'*right
+                if hasNull and len(fmt) < len(self.null):
+                    fmt = ' '*len(self.null)-len(fmt) + fmt
+            else:
+                w = 0
+                for value in values:
+                    if value is None:
+                        value = self.null
+
+                    w = max(w, len(value))
+
+                fmt = 'X'*w
+
+            result.append(fmt)
+
+        return result
+
 
 def make_columns(cursor_description):
     return [Column(*desc) for desc in cursor_description]
