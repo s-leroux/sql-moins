@@ -94,6 +94,27 @@ class PageTestCase(unittest.TestCase):
 
         self.assertEqual(page.formats(), ['+999.99', '+9.9', 'XXX'])
 
+    def test_page_default_formated(self):
+        colA = Column(*PEP249_NUMBER_10)
+        colB = Column(*PEP249_NUMBER_10)
+        colC = Column(*PEP249_VARCHAR_20)
+
+        page = Page([colA,colB, colC])
+
+        rows = [['1.3', '1.5', 'a'],
+                ['101', '1.4', 'abc'],
+                ['.33', '2.5', 'ab']]
+        exp  = [[ '  +1.30', '+1.5', '  a'],
+                [ '+101.00', '+1.4', 'abc'],
+                [ '   +.33', '+2.5', ' ab']]
+
+        for row in rows:
+            page.append(row)
+
+        result = list(page.formated())
+        self.assertEqual(exp, result)
+
+
 
 class ToCharTestCase(unittest.TestCase):
     def test_to_char_null_format(self):

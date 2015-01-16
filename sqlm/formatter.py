@@ -227,6 +227,14 @@ class Page:
 
         return result
 
+    def formated(self):
+        """
+        Generator that returns formated rows
+        """
+        fmt = self.formats()
+        for row in self.rows:
+            yield [to_char(value, f) for value, f in zip(row, fmt)]
+
 
 def make_columns(cursor_description):
     return [Column(*desc) for desc in cursor_description]
