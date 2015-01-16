@@ -95,3 +95,48 @@ class PageTestCase(unittest.TestCase):
         self.assertEqual(page.formats(), ['+999.99', '+9.9', 'XXX'])
 
 
+class ToCharTestCase(unittest.TestCase):
+    def test_to_char_null_format(self):
+        din = "abc"
+        dout = to_char(din, '')
+        # empty format returns the empty string
+        self.assertEqual(dout, '')
+
+    def test_to_char_string(self):
+        tests = [["abcdef", "XXXXXX", "abcdef"],
+                 ["abcdef", "XXX", "abc"],
+                 ["abcdef", "XXXXXXXXX", "   abcdef"]]
+
+        for data, fmt, expected in tests:
+            result = to_char(data,fmt)
+            self.assertEqual(expected, result)
+
+    def test_to_char_number(self):
+        tests = [[ '+123',  "99999", "   123"],
+                 [ '-123', "-99999", "  -123"],
+                 [ '+123', "-99999", "  +123"],
+                 [ '123.4', "99999.99", "   123.40"],
+                 [ '12345', "99.99", "######"],
+                 [ '123.44', "999.9", " 123.4"],
+                 [ '123.456', "999.9", " 123.5"],
+                 [ '123456789', "999,999,999", " 123,456,789"],
+                 [ '0.456', '.99', " .46"],
+                 [ '123.456', '999.', " 123."]]
+
+        for data, fmt, expected in tests:
+            result = to_char(data,fmt)
+            self.assertEqual(expected, result)
+
+
+class DecimalTestCase(unittest.TestCase):
+    def test_decimal_tuple(self):
+        tests = [[ '0.0001', (), (0,0,0,1)],
+                 [ '2E-4',   (), (0,0,0,2)],
+                 [ '123.456', (1,2,3), (4,5,6)],
+                 [ '123', (1,2,3), ()]]
+
+        for data, expected_integral, expected_fractional in tests:
+            sign, integral, fractional = decimal_tuple(Decimal(data))
+            self.assertEqual(expected_integral, integral, 'while testing '+data)
+            self.assertEqual(expected_fractional, fractional, 'while testing '+data)
+

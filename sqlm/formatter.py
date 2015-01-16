@@ -1,6 +1,127 @@
 from types import SimpleNamespace
 from decimal import Decimal
 import functools
+import re
+
+def decimal_tuple(d):
+    """
+    Return a tupple (sign, integral, fractional)
+    corresponding to the given decimal number.
+
+    This is different from the `as_tuple` method that
+    returns the mantisa and the exponent
+    """
+    sign, digits, exponent = d.normalize().as_tuple()
+    n = len(digits)+exponent
+    if n < 0:
+        digits = (0,)*-n + digits
+
+    if not exponent:
+        exponent = len(digits)
+
+    return sign, digits[:exponent], digits[exponent:]
+    
+
+class FormatError(ValueError):
+    def __init__(self, c, msg='format'):
+        super().__init__("Invalid character {!r} in {} model".format(c, msg))
+
+def _to_char_number(value, fmt):
+    """
+    Format a value using a *number* format
+    """
+    result=''
+    sign, integral, fractional = decimal_tuple(Decimal(value))
+    pos = dotidx = fmt.find('.')
+
+    if pos < 0:
+        pos = len(fmt)
+    else:
+        result = '.'
+
+    lpad = ' '
+    fill = ' '
+
+    if pos > 0:
+        for c in fmt[pos-1::-1]:
+            if c == '9':
+                if integral:
+                    *integral, n = integral
+                    result = str(n) + result
+                else:
+                    fill = lpad + fill
+            elif c in ('+','-'):
+                fill = fill[:-1]+ ('-' if sign else '+')
+            elif c == ',':
+                if integral:
+                    result = ',' + result
+                else:
+                    fill = lpad + fill
+            else:
+                raise FormatError(c, 'number format')
+
+    result = fill + result
+
+    if dotidx >= 0:
+        n = None
+        for c in fmt[dotidx+1:]:
+            if c == '9':
+                if fractional:
+                    n, *fractional = fractional
+                    result = result + str(n)
+                else:
+                    result += '0'
+            else:
+                raise FormatError(c, 'number format')
+       
+        # round last digit to the nearest
+        if fractional and fractional[0] >= 5 and n is not None:
+            result = result[:-1] + str(n+1)
+
+    if integral:
+        return '#' * len(result)
+    else:
+        return result
+
+
+def _to_char_string(value, fmt):
+    """
+    Format a value using a *string* format
+    """
+    value = str(value)
+    n = 0
+    for c in fmt:
+        if c == 'X':
+            n += 1
+        else:
+            raise FormatError(c, 'string format')
+
+    return value[0:n].rjust(n, ' ')
+
+def to_char(value, fmt):
+    """
+    Oracle-like TO_CHAR function.
+
+    Support numbers and string formats
+
+    Number
+    ======
+    9999    Number prefixed with a space for positive numbers,
+            '-' for negative numbers
+
+    Strings
+    =======
+    'X'* space (left) padded string 
+    """
+    if not fmt:
+        return ''
+
+    if fmt[0] in ('X'):
+        return _to_char_string(value, fmt)
+    elif fmt[0] in ('9','+','-', '.'):
+        return _to_char_number(value, fmt)
+    else:
+        raise FormatError(fmt[0])
 
 class Column(SimpleNamespace):
     # http://legacy.python.org/dev/peps/pep-0249/#cursor-attributes
