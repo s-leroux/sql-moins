@@ -15,8 +15,8 @@ def decimal_tuple(d):
     n = len(digits)+exponent
     if n < 0:
         digits = (0,)*-n + digits
-
-    if not exponent:
+    elif exponent >= 0:
+        digits = digits + (0,)*exponent
         exponent = len(digits)
 
     return sign, digits[:exponent], digits[exponent:]
@@ -60,6 +60,8 @@ def _to_char_number(value, fmt):
             else:
                 raise FormatError(c, 'number format')
 
+    if sign:
+        fill = fill[:-1] + '-'
     result = fill + result
 
     if dotidx >= 0:
@@ -210,7 +212,10 @@ class Page:
                         if left < max(0,len(digits) + exponent):
                             left = max(0,len(digits) + exponent)
 
-                fmt = '+'+'9'*left + '.' + '9'*right
+                fmt = '9'*left;
+                if right:
+                    fmt += '.' + '9'*right
+
                 if hasNull and len(fmt) < len(self.null):
                     fmt = ' '*len(self.null)-len(fmt) + fmt
             else:
@@ -279,18 +284,18 @@ class TabularFormatter:
 
         keys = result.keys()
         columns = make_columns(result.cursor.description)
-        fmt = " " + " | ".join(map(Column.get_format, columns)) + " "
-        sep = "-" + "-+-".join(map(Column.blank, columns))      + "-"
+        page = Page(columns)
 
-        data = []
-        for row in result: # prefetch data -- NOT NEEDED !!! 
-            data.append(row)
+        # fmt = " " + " | ".join(map(Column.get_format, columns)) + " "
+        # sep = "-" + "-+-".join(map(Column.blank, columns))      + "-"
+
+        for row in result:
+            page.append(row)
 
         #print(data)
         #print(fmt)
-        print(fmt.format(*keys))
-        print(sep)
-        for row in data:
-            #print(row)
-            print(fmt.format(*row))
+        # print(fmt.format(*keys))
+        # print(sep)
+        for row in page.formated():
+            print(" " + " | ".join(row) + " ")
             

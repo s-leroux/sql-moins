@@ -73,17 +73,19 @@ class PageTestCase(unittest.TestCase):
     def test_page(self):
         colA = Column(*PEP249_NUMBER_10)
         colB = Column(*PEP249_NUMBER_10)
-        colC = Column(*PEP249_VARCHAR_20)
+        colC = Column(*PEP249_NUMBER_10)
+        colD = Column(*PEP249_VARCHAR_20)
 
-        page = Page([colA,colB, colC])
+        page = Page([colA,colB, colC, colD])
 
         self.assertIs(page.columns[0], colA)
         self.assertIs(page.columns[1], colB)
         self.assertIs(page.columns[2], colC)
+        self.assertIs(page.columns[3], colD)
 
-        rows = [['1.3', '1.5', 'a'],
-                ['101', '1.4', 'abc'],
-                ['.33', '2.5', 'ab']]
+        rows = [['1.3', '1.5', '1', 'a'],
+                ['101', '1.4', '2', 'abc'],
+                ['.33', '2.5', '3', 'ab']]
 
         for row in rows:
             page.append(row)
@@ -92,7 +94,7 @@ class PageTestCase(unittest.TestCase):
         self.assertEqual(page.rows[1], rows[1])
         self.assertEqual(page.rows[2], rows[2])
 
-        self.assertEqual(page.formats(), ['+999.99', '+9.9', 'XXX'])
+        self.assertEqual(page.formats(), ['999.99', '9.9', '9', 'XXX'])
 
     def test_page_default_formated(self):
         colA = Column(*PEP249_NUMBER_10)
@@ -104,9 +106,9 @@ class PageTestCase(unittest.TestCase):
         rows = [['1.3', '1.5', 'a'],
                 ['101', '1.4', 'abc'],
                 ['.33', '2.5', 'ab']]
-        exp  = [[ '  +1.30', '+1.5', '  a'],
-                [ '+101.00', '+1.4', 'abc'],
-                [ '   +.33', '+2.5', ' ab']]
+        exp  = [[ '   1.30', ' 1.5', '  a'],
+                [ ' 101.00', ' 1.4', 'abc'],
+                [ '    .33', ' 2.5', ' ab']]
 
         for row in rows:
             page.append(row)
@@ -134,6 +136,7 @@ class ToCharTestCase(unittest.TestCase):
 
     def test_to_char_number(self):
         tests = [[ '+123',  "99999", "   123"],
+                 [ '-123',  "99999", "  -123"],
                  [ '-123', "-99999", "  -123"],
                  [ '+123', "-99999", "  +123"],
                  [ '123.4', "99999.99", "   123.40"],
@@ -154,7 +157,8 @@ class DecimalTestCase(unittest.TestCase):
         tests = [[ '0.0001', (), (0,0,0,1)],
                  [ '2E-4',   (), (0,0,0,2)],
                  [ '123.456', (1,2,3), (4,5,6)],
-                 [ '123', (1,2,3), ()]]
+                 [ '123', (1,2,3), ()],
+                 [ '100', (1,0,0), ()]]
 
         for data, expected_integral, expected_fractional in tests:
             sign, integral, fractional = decimal_tuple(Decimal(data))
