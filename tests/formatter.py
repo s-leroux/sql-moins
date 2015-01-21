@@ -94,7 +94,10 @@ class PageTestCase(unittest.TestCase):
         self.assertEqual(page.rows[1], rows[1])
         self.assertEqual(page.rows[2], rows[2])
 
-        self.assertEqual(page.formats(), ['999.99', '9.9', '9', 'XXX'])
+        self.assertEqual(page.formats(), [('999.99',7),
+                                          ('9.9',4), 
+                                          ('9',2), 
+                                          ('XXX',3)])
 
     def test_page_default_formated(self):
         colA = Column(*PEP249_NUMBER_10)
@@ -113,7 +116,7 @@ class PageTestCase(unittest.TestCase):
         for row in rows:
             page.append(row)
 
-        result = list(page.formated())
+        result = list(page.formated().rows())
         self.assertEqual(exp, result)
 
 

@@ -100,7 +100,7 @@ def _to_char_string(value, fmt):
 
     return value[0:n].rjust(n, ' ')
 
-def to_char(value, fmt):
+def to_char(value, fmt, null='null'):
     """
     Oracle-like TO_CHAR function.
 
@@ -115,6 +115,9 @@ def to_char(value, fmt):
     =======
     'X'* space (left) padded string 
     """
+    if value is None:
+        return null
+
     if not fmt:
         return ''
 
@@ -217,9 +220,9 @@ class Page:
                     fmt += '.' + '9'*right
 
                 if hasNull and len(fmt) < len(self.null):
-                    fmt = ' '*len(self.null)-len(fmt) + fmt
-
-                w = len(fmt)+1
+                    w = len(self.null)
+                else:
+                    w = len(fmt)+1
             else:
                 w = 0
                 for value in values:
@@ -239,13 +242,14 @@ class Page:
         """
         Generator that returns formated rows
         """
-        return Formatter(self.columns, self.rows, self.formats())
+        return Formatter(self.columns, self.rows, self.formats(), self.null)
 
 class Formatter:
-    def __init__(self, columns, rows, fmt):
+    def __init__(self, columns, rows, fmt, null):
         self._columns = columns
         self._rows = rows
         self._fmt = fmt
+        self._null = null
 
     def header(self):
         return [c.name.rjust(w,' ') 
@@ -256,7 +260,7 @@ class Formatter:
 
     def rows(self):
         for row in self._rows:
-            yield [to_char(v, f).rjust(w,' ') 
+            yield [to_char(v, f,null=self._null).rjust(w,' ') 
                         for v, (f,w) in zip(row, self._fmt)]
 
 
