@@ -325,6 +325,7 @@ class TabularFormatter:
             if not header:
                 print(" " + " | ".join(pf.header()) + " ")
                 print(" " + "-+-".join(pf.blank('-')) + " ")
+                header = True
 
             print(" " + " | ".join(row) + " ")
         
