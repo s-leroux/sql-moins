@@ -13,4 +13,3 @@ BUG     `!` should be used for shell commands -- not history
 BUG     Insufficient test coverage !!!
 BUG     Decimal (NUMBER(14,2)) are not properly displayed (dot align)
 BUG     SQL comments (`--`) are not handled
-BUG     Column's names are not displayed in result set

@@ -218,17 +218,20 @@ class Page:
 
                 if hasNull and len(fmt) < len(self.null):
                     fmt = ' '*len(self.null)-len(fmt) + fmt
+
+                w = len(fmt)+1
             else:
                 w = 0
                 for value in values:
                     if value is None:
                         value = self.null
 
-                    w = max(w, len(value))
+                    w = max(w, len(str(value)))
 
                 fmt = 'X'*w
 
-            result.append(fmt)
+            w = max(len(c.name), w)
+            result.append((fmt,w))
 
         return result
 
@@ -236,9 +239,25 @@ class Page:
         """
         Generator that returns formated rows
         """
-        fmt = self.formats()
-        for row in self.rows:
-            yield [to_char(value, f) for value, f in zip(row, fmt)]
+        return Formatter(self.columns, self.rows, self.formats())
+
+class Formatter:
+    def __init__(self, columns, rows, fmt):
+        self._columns = columns
+        self._rows = rows
+        self._fmt = fmt
+
+    def header(self):
+        return [c.name.rjust(w,' ') 
+                    for c, (f,w) in zip(self._columns, self._fmt)]
+
+    def blank(self, fill = ' '):
+        return [(fill*w)[:w] for f,w in self._fmt]
+
+    def rows(self):
+        for row in self._rows:
+            yield [to_char(v, f).rjust(w,' ') 
+                        for v, (f,w) in zip(row, self._fmt)]
 
 
 def make_columns(cursor_description):
@@ -296,6 +315,16 @@ class TabularFormatter:
         #print(fmt)
         # print(fmt.format(*keys))
         # print(sep)
-        for row in page.formated():
+
+        cw = [len(key) for key in keys]
+
+        pf = page.formated();
+        header = False
+
+        for row in pf.rows():
+            if not header:
+                print(" " + " | ".join(pf.header()) + " ")
+                print(" " + "-+-".join(pf.blank('-')) + " ")
+
             print(" " + " | ".join(row) + " ")
-            
+        
