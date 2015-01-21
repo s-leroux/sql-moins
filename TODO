@@ -12,3 +12,4 @@ BUG     Oracle dialect does not handle correctly NULL when generating INSERT
 BUG     `!` should be used for shell commands -- not history
 BUG     Insufficient test coverage !!!
 BUG     Decimal (NUMBER(14,2)) are not properly displayed (dot align)
+BUG     SQL comments (`--`) are not handled
