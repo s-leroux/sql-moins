@@ -185,7 +185,9 @@ class Interpreter:
 
         if not self.curr:
             # First line of a new statement
-            if not line:
+
+            # Ignore empty lines or comment-only lines
+            if not line or line.lstrip().startswith('--'):
                 return 0
 
             cmd = self.findCommand(line)
