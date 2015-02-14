@@ -11,12 +11,11 @@ _TK_RE = re.compile(r"""("""
                     r""")""")
 
 def _unquote(tk):
-    """Return a normalized representation of a token.
+    """Remove quotes from a string. Perform required substitutions.
 
-    - Non-quotes strings are converted to uppercase
     - Enclosing quotes are removed
-    - double-single-quotes are replaced by single quote in single quote strings
-      (i.e:  'abc''def' => 'abc'def')
+    - double-single-quotes are replaced by single quote in single quoted strings
+      (i.e:  'abc''def' => abc'def)
     """
     if not tk:
         return tk
@@ -27,7 +26,7 @@ def _unquote(tk):
     if tk[0] == tk[-1] == "'":
         return tk[1:-1].replace("''","'")
 
-    return tk.upper()
+    return tk
 
 def tokenize(stmt):
     """tokenize a statement.
@@ -53,14 +52,23 @@ def tokenize(stmt):
 def unify(pattern, tokens):
     """Try to unify a pattern with a list of tokens.
 
-    Returns a dictionnary containing the matching values.
+    Returns a dictionnary containing the bound variables.
+
+    All uppercase letters-only tokens in the pattern are assumed to
+    be keywords and are case insensitive.
+
+    All lowercase letters-only tokens are assumed to be bound variable.
+    They are matched case-sensitive.
+
+    All other tokens are case-sensitive matched
 
     example:
-       unify("SET :attr TO :value", "SET V TO 1")
+       unify("SET attr TO value", "SET V TO abc")
 
-    will return { 'ATTR':'V', 'VALUE':'1'}
+    will return { 'attr':'V', 'value':'abc'}
 
-    Unification will work as expected in case of multiple bind values.
+    Unification will work as expected in case of multiple occurence
+    of the same bind values.
     """
     if type(pattern) == str:
         pattern = tokenize(pattern)
@@ -73,11 +81,14 @@ def unify(pattern, tokens):
 
     result = {}
     for p, tk in zip(pattern, tokens):
-        if p.startswith(':'):
-            k = p[1:]
-            p = result.get(k)
-            if p is None:
-                result[k] = p = tk
+        if p.isalpha():
+            if p.isupper():
+                tk = tk.upper()
+            elif p.islower():
+                k = p
+                p = result.get(k)
+                if p is None:
+                    result[k] = p = tk
         
         if p != tk:
             raise ValueError("Can't match: " + p +" " + tk)

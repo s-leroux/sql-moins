@@ -6,8 +6,8 @@ class TokenizerTestCase(unittest.TestCase):
     def test_unquote(self):
         """Test unquoted representation of tokens.
         """
-        tc = (  # token                     # canonical representation
-                ("abc"                      , "ABC"),
+        tc = (  # token                     # unquoted representation
+                ("Abc"                      , "Abc"),
                 ("'abc'"                    , "abc"),
                 ("\"abc\""                  , "abc"),
                 ("\"ab''c\""                , "ab''c"),
@@ -23,16 +23,16 @@ class TokenizerTestCase(unittest.TestCase):
 
     def test_tokenizer_good(self):
         tc = (  # string                    # tokens
-                ("abc def ghi klm",         ("ABC","DEF","GHI","KLM")),
-                ("abc 'def ghi' klm",       ("ABC","def ghi", "KLM")),
-                ("abc \"def ghi\" klm",     ("ABC","def ghi", "KLM")),
-                ("abc '' klm",              ("ABC","", "KLM")),
-                ("abc '''' klm",            ("ABC","'", "KLM")),
+                ("abc def GHI klm",         ("abc","def","GHI","klm")),
+                ("abc 'def GHI' klm",       ("abc","def GHI", "klm")),
+                ("abc \"def GHI\" klm",     ("abc","def GHI", "klm")),
+                ("abc '' klm",              ("abc","", "klm")),
+                ("abc '''' klm",            ("abc","'", "klm")),
                 ("",                        ()),
-                ("!abc def",                ("!", "ABC","DEF")),
-                ("!!abc def",               ("!!", "ABC","DEF")),
-                ("@abc def",                ("@", "ABC","DEF")),
-                ("@@abc def",               ("@@", "ABC","DEF")),
+                ("!abc def",                ("!", "abc","def")),
+                ("!!abc def",               ("!!", "abc","def")),
+                ("@abc def",                ("@", "abc","def")),
+                ("@@abc def",               ("@@", "abc","def")),
             )
         for test, expected in tc:
             self.assertSequenceEqual(utils.tokenize(test), expected, test)
@@ -52,8 +52,10 @@ class TokenizerTestCase(unittest.TestCase):
 
     def test_unify_good(self):
         tc = ( # Pattern            # String            # Expected
-             ("SET :k TO :v",       "SET KEY TO 123",    {'K':'KEY','V':'123'}),
-             ("SET :k TO :k",       "SET KEY TO KEY",    {'K':'KEY'}),
+             ("SET k TO v",         "SET KEY TO 123",    {'k':'KEY','v':'123'}),
+             ("SET k TO v",         "set KEY To 123",    {'k':'KEY','v':'123'}),
+             ("SET k TO v",         "SET Key TO 123",    {'k':'Key','v':'123'}),
+             ("SET k TO k",         "SET KEY TO KEY",    {'k':'KEY'}),
             )
 
         for pattern, stmt, expected in tc:
@@ -70,7 +72,7 @@ class TokenizerTestCase(unittest.TestCase):
         
     def test_compile(self):
         tc = (
-                ("abc def ghi klm",         ("ABC","DEF","GHI","KLM")),
+                ("abc def GHI klm",         ("abc","def","GHI","klm")),
             )
 
         for test, expected in tc:
