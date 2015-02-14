@@ -1,6 +1,6 @@
 import unittest
 
-from sqlm.utils import tokenize, _unquote, unify
+import sqlm.utils as utils
 
 class TokenizerTestCase(unittest.TestCase):
     def test_unquote(self):
@@ -19,7 +19,7 @@ class TokenizerTestCase(unittest.TestCase):
                 ("\"''\""                   , "''"),
             )
         for test, expected in tc:
-            self.assertEqual(_unquote(test), expected, test)
+            self.assertEqual(utils._unquote(test), expected, test)
 
     def test_tokenizer_good(self):
         tc = (  # string                    # tokens
@@ -29,9 +29,13 @@ class TokenizerTestCase(unittest.TestCase):
                 ("abc '' klm",              ("ABC","", "KLM")),
                 ("abc '''' klm",            ("ABC","'", "KLM")),
                 ("",                        ()),
+                ("!abc def",                ("!", "ABC","DEF")),
+                ("!!abc def",               ("!!", "ABC","DEF")),
+                ("@abc def",                ("@", "ABC","DEF")),
+                ("@@abc def",               ("@@", "ABC","DEF")),
             )
         for test, expected in tc:
-            self.assertSequenceEqual(tokenize(test), expected, test)
+            self.assertSequenceEqual(utils.tokenize(test), expected, test)
         
     def test_tokenizer_bad(self):
         tc = (  # string   
@@ -43,7 +47,7 @@ class TokenizerTestCase(unittest.TestCase):
             )
         for test in tc:
             with self.assertRaises(ValueError, msg=test):
-                tokenize(test)
+                utils.tokenize(test)
 
 
     def test_unify_good(self):
@@ -53,7 +57,7 @@ class TokenizerTestCase(unittest.TestCase):
             )
 
         for pattern, stmt, expected in tc:
-            self.assertEqual(unify(pattern, stmt), expected, pattern)
+            self.assertEqual(utils.unify(pattern, stmt), expected, pattern)
 
     def test_unify_bad(self):
         tc = ( # Pattern            # String        
@@ -62,6 +66,12 @@ class TokenizerTestCase(unittest.TestCase):
 
         for pattern, stmt in tc:
             with self.assertRaises(ValueError, msg=pattern):
-                unify(pattern, stmt)
+                utils.unify(pattern, stmt)
         
+    def test_compile(self):
+        tc = (
+                ("abc def ghi klm",         ("ABC","DEF","GHI","KLM")),
+            )
 
+        for test, expected in tc:
+            self.assertSequenceEqual(utils.compile(test)._tokens, expected, test)

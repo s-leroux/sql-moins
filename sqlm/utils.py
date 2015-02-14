@@ -1,11 +1,13 @@
 import re
 
 _TK_RE = re.compile(r"""("""
-                    r"""(?:'(?:[^']|[']['])*')"""  # single quotes + SQL escape
+                    r"""(?:^[!@]+)"""               # leading special symbols
                     r"""|"""
-                    r"""(?:"[^"]*")"""             # double quotes
+                    r"""(?:'(?:[^']|[']['])*'(?=\s|$))"""  # single quotes + SQL escape
                     r"""|"""
-                    r"""(?:[^'"\s]+)"""            # non-space non quotes
+                    r"""(?:"[^"]*"(?=\s|$))"""      # double quotes
+                    r"""|"""
+                    r"""(?:[^'"\s]+(?=\s|$))"""     # non-space non quotes
                     r""")""")
 
 def _unquote(tk):
@@ -33,20 +35,17 @@ def tokenize(stmt):
     Returns a list of the 'words' of the statement.
     Quoted string are considered as one word"""
 
-    t = _TK_RE.split(" " + stmt + " ")
+    t = _TK_RE.split(stmt.lstrip())
     # at this point:
-    # - t[n] is a (non empty) sequence of spaces
+    # - t[n] is a (possibly empty) sequence of spaces
     # - t[n+1] is a token
     #
-    # if any inner t[n] is empty, the statement is considered as ill formed
-    # (missing separator) and will raise ValueError
-    # if t[n] does not contains only spaces, the statement is ill formed
+    # if t[n] is not empty but does not contains only spaces, 
+    # the statement is ill formed
     # (missing quote/unbalanced quotes) and will raise ValueError
 
     for sep in t[::2]:
-        if not sep:
-            raise ValueError("Missing seperator " + str(t))
-        elif not sep.isspace():
+        if sep and not sep.isspace():
             raise ValueError("Unbalanced quotes" + str(t))
 
     return [_unquote(tk) for tk in t[1:-1:2]]
@@ -85,6 +84,17 @@ def unify(pattern, tokens):
                 
     
     return result
+
+
+class TokenSeq:
+    def __init__(self, stmt):
+        self._tokens = tokenize(stmt)
+
+    def unify(self, stmt):
+        return unify(self._tokens, stmt)
+
+def compile(stmt):
+    return TokenSeq(stmt)
 
 
 _NS_RE = re.compile('([-+]?[0-9]+)(?:-([-+]?[0-9]+))?')
