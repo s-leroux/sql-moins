@@ -3,11 +3,13 @@ import re
 _TK_RE = re.compile(r"""("""
                     r"""(?:^[!@]+)"""               # leading special symbols
                     r"""|"""
-                    r"""(?:'(?:[^']|[']['])*'(?=\s|$))"""  # single quotes + SQL escape
+                    r"""(?:[\[\]])"""               # backets
                     r"""|"""
-                    r"""(?:"[^"]*"(?=\s|$))"""      # double quotes
+                    r"""(?:'(?:[^']|[']['])*'(?=]?(?:\s|$)))"""  # single quotes + SQL escape
                     r"""|"""
-                    r"""(?:[^'"\s]+(?=\s|$))"""     # non-space non quotes
+                    r"""(?:"[^"]*"(?=]?(?:\s|$)))"""      # double quotes
+                    r"""|"""
+                    r"""(?:[^'"\s]+?(?=]?(?:\s|$)))"""     # non-space non quotes
                     r""")""")
 
 def _unquote(tk):
@@ -27,6 +29,34 @@ def _unquote(tk):
         return tk[1:-1].replace("''","'")
 
     return tk
+
+def _parse(tokens):
+    """Build a tree representation of a tokenized expressions
+    """
+    stk = []
+    expr = []
+    for token in tokens:
+        if token == '[':
+            stk.append(expr)
+            expr = []
+        elif token == ']':
+            subexpr = tuple(expr)
+            expr = stk.pop()
+            expr.append(subexpr)
+        else:
+            expr.append(token)
+
+    if stk:
+        raise ValueError("Unbalanced brackets")
+
+    return tuple(expr)
+
+def parse(pattern):
+    """Parse a pattern expressed as a string.
+    """
+
+    return _parse(tokenize(pattern))
+            
 
 def tokenize(stmt):
     """tokenize a statement.
@@ -56,10 +86,25 @@ def _unify(pattern, tokens, bound = {}):
     """
     #print(pattern, tokens, bound)
     if not pattern and not tokens:
-        return bound
+        return bound, ()
 
     if pattern:
         hp, *pattern = pattern
+        if type(hp) != str:
+            # Not a string. Assume an optional sub-expression
+            
+            # First try to parse with the optional sub-expression:
+            ans, tail = _unify(hp, tokens, bound)
+            if ans is not None:
+                ans, tail = _unify(pattern, tail, ans)
+                if ans is not None:
+                    return ans, tail
+
+            # If we reach this point, we can't find a match with the
+            # sub-expression. Ignore it and continue.
+            return _unify(pattern, tokens, bound)
+
+
         occ = '1'
         occ_min = 1
         occ_max = 1
@@ -67,14 +112,15 @@ def _unify(pattern, tokens, bound = {}):
             hp = hp[:-1]
             occ = '?'
             occ_min = 0
-        elif hp[-1:] == '*':
+        elif hp[-1:] == '*': # XXX we should implement unbound list by
+                             # using infinitly nested lists
             hp = hp[:-1]
             occ = '*'
             occ_min = 0
             occ_max = len(tokens)
 
-        if len(tokens) < occ_min:
-            return None
+        # if len(tokens) < occ_min:
+        #    return None, None
         
         for n in range(occ_max, occ_min-1,-1):
             #print(n)
@@ -96,11 +142,11 @@ def _unify(pattern, tokens, bound = {}):
 
             #print(tk,bv)
             if tk == bv:
-                ans = _unify(pattern, tokens[n:], nbound)
+                ans, ntokens = _unify(pattern, tokens[n:], nbound)
                 if ans is not None:
-                    return ans
+                    return ans, ntokens
 
-    return None
+    return None, None
 
 def unify(pattern, tokens):
     """Try to unify a pattern with a list of tokens.
@@ -129,7 +175,7 @@ def unify(pattern, tokens):
     if type(tokens) == str:
         tokens = tokenize(tokens)
 
-    ans = _unify(pattern, tokens)
+    ans, tail = _unify(pattern, tokens)
     if ans is None:
         return None
 
@@ -140,7 +186,7 @@ def unify(pattern, tokens):
 
 class TokenSeq:
     def __init__(self, stmt):
-        self._tokens = tokenize(stmt)
+        self._tokens = parse(stmt)
 
     def unify(self, stmt):
         return unify(self._tokens, stmt)

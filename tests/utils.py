@@ -21,6 +21,23 @@ class TokenizerTestCase(unittest.TestCase):
         for test, expected in tc:
             self.assertEqual(utils._unquote(test), expected, test)
 
+    def test_parse_good(self):
+        tc = (  # string                    # tokens
+                ("ED fn [FOR evt]",         ("ED","fn",("FOR","evt"))),
+                ("ED fn [[FOR] evt]",         ("ED","fn",(("FOR",),"evt"))),
+            )
+        for test, expected in tc:
+            self.assertSequenceEqual(utils.parse(test), expected, test)
+        
+    def test_parse_bad(self):
+        tc = (  # string   
+                ("ED fn [FOR evt"),         # missing closing bracket
+            )
+        for test in tc:
+            with self.assertRaises(ValueError, msg=test):
+                utils.parse(test)
+
+
     def test_tokenizer_good(self):
         tc = (  # string                    # tokens
                 ("abc def GHI klm",         ("abc","def","GHI","klm")),
