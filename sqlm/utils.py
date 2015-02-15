@@ -47,7 +47,60 @@ def tokenize(stmt):
         if sep and not sep.isspace():
             raise ValueError("Unbalanced quotes" + str(t))
 
-    return [_unquote(tk) for tk in t[1:-1:2]]
+    return tuple(_unquote(tk) for tk in t[1:-1:2])
+
+def _unify(pattern, tokens, bound = {}):
+    """Try to unify a pattern with a list of tokens.
+
+    Both must be expressed as sequences.
+    """
+    #print(pattern, tokens, bound)
+    if not pattern and not tokens:
+        return bound
+
+    if pattern:
+        hp, *pattern = pattern
+        occ = '1'
+        occ_min = 1
+        occ_max = 1
+        if hp[-1:] == '?':
+            hp = hp[:-1]
+            occ = '?'
+            occ_min = 0
+        elif hp[-1:] == '*':
+            hp = hp[:-1]
+            occ = '*'
+            occ_min = 0
+            occ_max = len(tokens)
+
+        if len(tokens) < occ_min:
+            return None
+        
+        for n in range(occ_max, occ_min-1,-1):
+            #print(n)
+            tk = tokens[:n]
+            bv = [hp]*n
+            nbound = bound
+            if hp.isalpha():
+                if hp.isupper():
+                    tk = [i.upper() for i in tk]
+                    bv = [hp]*n
+                elif hp.islower():
+                    bv = bound.get(hp)
+                    if bv is None:
+                        nbound = bound.copy()
+                        bv = tk
+                        nbound[hp] = (occ,bv)
+                    else:
+                        bv = bv[1]
+
+            #print(tk,bv)
+            if tk == bv:
+                ans = _unify(pattern, tokens[n:], nbound)
+                if ans is not None:
+                    return ans
+
+    return None
 
 def unify(pattern, tokens):
     """Try to unify a pattern with a list of tokens.
@@ -76,25 +129,13 @@ def unify(pattern, tokens):
     if type(tokens) == str:
         tokens = tokenize(tokens)
 
-    if len(pattern) != len(tokens):
-        raise ValueError("Mismatch between pattern and tokens length")
+    ans = _unify(pattern, tokens)
+    if ans is None:
+        return None
 
-    result = {}
-    for p, tk in zip(pattern, tokens):
-        if p.isalpha():
-            if p.isupper():
-                tk = tk.upper()
-            elif p.islower():
-                k = p
-                p = result.get(k)
-                if p is None:
-                    result[k] = p = tk
-        
-        if p != tk:
-            raise ValueError("Can't match: " + p +" " + tk)
-                
-    
-    return result
+    return {k: v[1] if v[0] == '*'
+               else v[1][0] if v[0] == '1'
+               else (v[1] or (None,))[0] for k, v in ans.items()}
 
 
 class TokenSeq:

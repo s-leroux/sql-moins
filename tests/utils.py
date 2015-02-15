@@ -49,7 +49,6 @@ class TokenizerTestCase(unittest.TestCase):
             with self.assertRaises(ValueError, msg=test):
                 utils.tokenize(test)
 
-
     def test_unify_good(self):
         tc = ( # Pattern            # String            # Expected
              ("SET k TO v",         "SET KEY TO 123",    {'k':'KEY','v':'123'}),
@@ -61,14 +60,27 @@ class TokenizerTestCase(unittest.TestCase):
         for pattern, stmt, expected in tc:
             self.assertEqual(utils.unify(pattern, stmt), expected, pattern)
 
+    def test_unify_quantifiers(self):
+        tc = ( # Pattern            # String            # Expected
+             ("SET k TO? v",        "SET KEY TO 123",    {'k':'KEY','v':'123'}),
+             ("SET k TO? v",        "set KEY 123",       {'k':'KEY','v':'123'}),
+             ("SET k v?",           "SET Key 123",       {'k':'Key','v':'123'}),
+             ("SET k v?",           "SET Key",           {'k':'Key','v':None}),
+             ("SET k v*",           "SET Key",           {'k':'Key','v':()}),
+             ("SET k v*",           "SET Key 1",         {'k':'Key','v':('1',)}),
+             ("SET k v*",           "SET Key 1 2",       {'k':'Key','v':('1','2')}),
+            )
+
+        for pattern, stmt, expected in tc:
+            self.assertEqual(utils.unify(pattern, stmt), expected, pattern)
+
     def test_unify_bad(self):
         tc = ( # Pattern            # String        
              ("SET :k TO :k",       "SET KEY TO 123"),
             )
 
         for pattern, stmt in tc:
-            with self.assertRaises(ValueError, msg=pattern):
-                utils.unify(pattern, stmt)
+            self.assertIsNone(utils.unify(pattern, stmt), pattern)
         
     def test_compile(self):
         tc = (
