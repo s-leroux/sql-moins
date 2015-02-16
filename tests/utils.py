@@ -23,11 +23,11 @@ class TokenizerTestCase(unittest.TestCase):
 
     def test_parse_good(self):
         tc = (  # string                    # tokens
-                ("ED fn [FOR evt]",         ("ED","fn",("FOR","evt"))),
-                ("ED fn [[FOR] evt]",         ("ED","fn",(("FOR",),"evt"))),
+                ("ED fn [FOR evt]",         ["ED","fn",["FOR","evt"]]),
+                ("ED fn [[FOR] evt]",       ["ED","fn",[["FOR"],"evt"]]),
             )
         for test, expected in tc:
-            self.assertSequenceEqual(utils.parse(test), expected, test)
+            self.assertSequenceEqual(utils.parse(test)[0], expected, test)
         
     def test_parse_bad(self):
         tc = (  # string   
@@ -39,17 +39,22 @@ class TokenizerTestCase(unittest.TestCase):
 
 
     def test_tokenizer_good(self):
-        tc = (  # string                    # tokens
-                ("abc def GHI klm",         ("abc","def","GHI","klm")),
-                ("abc 'def GHI' klm",       ("abc","def GHI", "klm")),
-                ("abc \"def GHI\" klm",     ("abc","def GHI", "klm")),
-                ("abc '' klm",              ("abc","", "klm")),
-                ("abc '''' klm",            ("abc","'", "klm")),
-                ("",                        ()),
-                ("!abc def",                ("!", "abc","def")),
-                ("!!abc def",               ("!!", "abc","def")),
-                ("@abc def",                ("@", "abc","def")),
-                ("@@abc def",               ("@@", "abc","def")),
+        tc = (  # string                  # tokens
+                ("abc def GHI klm",       ("abc","def","GHI","klm")),
+                ("abc 'def GHI' klm",     ("abc","def GHI", "klm")),
+                ("abc \"def GHI\" klm",   ("abc","def GHI", "klm")),
+                ("abc '' klm",            ("abc","", "klm")),
+                ("abc '''' klm",          ("abc","'", "klm")),
+                ("abc [def] GHI",         ("abc","[","def","]","GHI")),
+                ("abc [ def ] GHI",       ("abc","[","def","]","GHI")),
+                ("abc [[def] GHI]",       ("abc","[","[","def","]","GHI","]")),
+                ("abc [def]...",          ("abc","[","def","]","...")),
+                ("abc... def GHI",        ("abc","...", "def","GHI")),
+                ("",                      ()),
+                ("!abc def",              ("!", "abc","def")),
+                ("!!abc def",             ("!!", "abc","def")),
+                ("@abc def",              ("@", "abc","def")),
+                ("@@abc def",             ("@@", "abc","def")),
             )
         for test, expected in tc:
             self.assertSequenceEqual(utils.tokenize(test), expected, test)
@@ -71,7 +76,6 @@ class TokenizerTestCase(unittest.TestCase):
              ("SET k TO v",         "SET KEY TO 123",    {'k':'KEY','v':'123'}),
              ("SET k TO v",         "set KEY To 123",    {'k':'KEY','v':'123'}),
              ("SET k TO v",         "SET Key TO 123",    {'k':'Key','v':'123'}),
-             ("SET k TO k",         "SET KEY TO KEY",    {'k':'KEY'}),
             )
 
         for pattern, stmt, expected in tc:
@@ -79,13 +83,13 @@ class TokenizerTestCase(unittest.TestCase):
 
     def test_unify_quantifiers(self):
         tc = ( # Pattern            # String            # Expected
-             ("SET k TO? v",        "SET KEY TO 123",    {'k':'KEY','v':'123'}),
-             ("SET k TO? v",        "set KEY 123",       {'k':'KEY','v':'123'}),
-             ("SET k v?",           "SET Key 123",       {'k':'Key','v':'123'}),
-             ("SET k v?",           "SET Key",           {'k':'Key','v':None}),
-             ("SET k v*",           "SET Key",           {'k':'Key','v':()}),
-             ("SET k v*",           "SET Key 1",         {'k':'Key','v':('1',)}),
-             ("SET k v*",           "SET Key 1 2",       {'k':'Key','v':('1','2')}),
+             ("SET k [TO] v",       "SET KEY TO 123",    {'k':'KEY','v':'123'}),
+             ("SET k [TO] v",       "set KEY 123",       {'k':'KEY','v':'123'}),
+             ("SET k [v]",          "SET Key 123",       {'k':'Key','v':'123'}),
+             ("SET k [v]",          "SET Key",           {'k':'Key'}),
+             ("SET k [v]...",       "SET Key",           {'k':'Key'}),
+             ("SET k [v]...",       "SET Key 1",         {'k':'Key','v':['1']}),
+             ("SET k [v]...",       "SET Key 1 2",       {'k':'Key','v':['1','2']}),
             )
 
         for pattern, stmt, expected in tc:
@@ -105,4 +109,4 @@ class TokenizerTestCase(unittest.TestCase):
             )
 
         for test, expected in tc:
-            self.assertSequenceEqual(utils.compile(test)._tokens, expected, test)
+            self.assertSequenceEqual(utils.compile(test)._pattern, expected, test)
