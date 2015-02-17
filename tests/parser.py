@@ -51,6 +51,7 @@ class TokenizerTestCase(unittest.TestCase):
                 ("abc [ def ] GHI",       ("abc","[","def","]","GHI")),
                 ("abc [[def] GHI]",       ("abc","[","[","def","]","GHI","]")),
                 ("abc [def]...",          ("abc","[","def","]","...")),
+                ("abc [def...]",          ("abc","[","def","...","]")),
                 ("abc... def GHI",        ("abc","...", "def","GHI")),
                 ("",                      ()),
                 ("!abc def",              ("!", "abc","def")),

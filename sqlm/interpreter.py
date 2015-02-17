@@ -14,6 +14,9 @@ from sqlm.console import FileInputStream
 from sqlm.formatter import TabularFormatter
 from sqlm.utils import numSelector
 
+import sqlm.parser
+import sqlm.utils
+
 class ArgumentError(Exception):
     def __init__(self, message):
         super(ArgumentError, self).__init__(message)
@@ -34,6 +37,7 @@ class Environment:
             "/":        re.compile(r'^(.*)\n/$', re.DOTALL)
         }
         self.termination = self.terminations[";"]
+        self.bindParams = {}
 
         self.autocommit = True
 
@@ -57,6 +61,9 @@ class Environment:
                 self.autocommit = False
             else:
                 raise ArgumentError("Not a valid option for AUTOCOMMIT " + v)
+        elif i[0] == ':': # Bind parameter
+            paramName = i[1:]
+            self.bindParams[paramName] = "XXX" # XXX fix me 
         else:
             raise ArgumentError("Unknown parameter " + i)
 
@@ -78,17 +85,20 @@ class Environment:
         print(err, file=sys.stderr)
 
 class Command:
-    def __init__(self, action = None, desc = "", usage = "" , args = ()):
+    def __init__(self, action = None, pattern=(), desc = "", usage = "" , args = (), kw = {}):
         self.action = action
         self.desc = desc
         self.usage = usage
         self.args = args
+        self.pattern = pattern
+        self.kw = kw
 
     def doIt(self, env):
         try:
-            return self.action(env, *self.args)
+            return self.action(env, *self.args, **self.kw)
         except ArgumentError as err:
             print("Error:", self.desc)
+            print(" ".join(self.pattern))
             print(self.usage)
             raise
     
@@ -97,7 +107,7 @@ class Interpreter:
     """
     The Interpreter.
 
-    This object is responsible to assembly lines into statements.
+    This object is responsible to merge lines into statements.
     If the first line of a statement start with a known internal
     command it will be executed immediatly. Otherwise, a statement
     is assembled and send to the server when the termination pattern
@@ -108,6 +118,18 @@ class Interpreter:
         self.connection = None
         self.console = console
         self.formatter = TabularFormatter()
+
+        self.ncommands = {
+            "ED [filename] [ ! events...]":  dict(
+                action = self.doEdit,
+                desc="Edit some events in a file"
+            ),
+        }
+
+        # Compile commands patterns
+        for cmd, d in self.ncommands.items():
+            d['pattern'] = sqlm.parser.compile(cmd)
+
 
         self.commands = {
                 '!':     dict(action=self.doRunPrevious,
@@ -122,9 +144,6 @@ class Interpreter:
                 'READ':     dict(action=self.doRead,
                                 usage="read table_name",
                                 desc="Read tabular data to create a table"),
-                'ED':     dict(action=self.doEdit,
-                                usage="ed path",
-                                desc="launch a text $EDITOR"),
                 'QUIT':     dict(action=self.doQuit,
                                 usage="quit",
                                 desc="quit the command line interpreter"),
@@ -142,6 +161,14 @@ class Interpreter:
         self.curr = "" # The current statement as a list of lines
 
     def findCommand(self, stmt):
+        # New command parsing
+        cmdline = sqlm.parser.tokenize(stmt)
+        for cmd in self.ncommands.values():
+            m = cmd['pattern'].match(cmdline)
+            if m is not None:
+                return Command(kw=m, **cmd)
+
+        # Legacy command parsing
         args = shlex.split(stmt)
         if args and args[0]:
             cmd = self.commands.get(args[0].upper())
@@ -290,12 +317,12 @@ class Interpreter:
 
         self.doHistory(env, 2)
 
-    def doEdit(self, env, *args):
+    def doEdit(self, env, filename=None, events=()):
         """
         Launch an editor.
 
         Usage:
-            ed [filename]? [n|n1-n2]*
+            ed [filename]? [ for [n|n1-n2]* ]?
 
         Without any argument, edit the last command in the buffer
         in the file 'edbuf.sql'
@@ -306,26 +333,18 @@ class Interpreter:
         of the file with the given entries in the history buffer.
         """
 
-        # Set default values
-        path = 'edbuf.sql'
+        if filename is None:
+            if not events:
+                events = ("-1",)
+            filename = 'edbuf.sql'
 
-        # If there is *no* argument at all, 
-        # assume we are editing the last buffer entry
-        if not len(args):
-            args = ("-1",)
-        # If the first argument is non-numeric, it is a filename
-        elif not re.match(r"^[-+]?\d+(-[-+]?\d+)?$", args[0]):
-            path = args[0]
-            args = args[1:]
-
-        # Remaining arguments are assumed to be selectors in the buffer
-        # OVERWRITE the content of the file with that
-        if len(args):
-            sel = list(numSelector(args)) # materilize the list first
+        # OVERWRITE the content of the file with the specified events
+        if events:
+            sel = list(numSelector(events)) # materilize the list first
                                           # to avoid partial overwrite
                                           # of the file in case of
                                           # incorrectly formated arguments
-            with open(path, 'wt') as f:
+            with open(filename, 'wt') as f:
                 for n in sel:
                     f.write(str(self.history[n]))
                     f.write('\n/\n')
@@ -334,18 +353,18 @@ class Interpreter:
         if not editor:
             editor = 'vi'
 
-        print("Editing:", path, "with", editor)
-        subprocess.call([editor, path])
+        print("Editing:", filename, "with", editor)
+        subprocess.call([editor, filename])
 
     def doHistory(self, env, *args):
         n, = self.getArgs(0, 1, args)
 
         if n is not None:
             n = int(n)
-            if n <= 0:
+            if n < 0:
                 raise ArgumentError("Expected a non nul positive integer")
         else:
-            n = len(self.history)-1
+            n = len(self.history)
 
         base_idx = max(len(self.history)-n,0)
         for idx, val in enumerate(self.history[base_idx:]):
