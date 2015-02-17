@@ -121,7 +121,7 @@ class Interpreter:
 
         self.ncommands = {
             "!" : dict(
-                usage="! events...",
+                usage="!events...",
                 action=self.doRunPrevious,
                 desc="execute a command from the buffer history",
             ),
@@ -171,28 +171,17 @@ class Interpreter:
         for cmd in self.ncommands.values():
             cmd['pattern'] = sqlm.parser.compile(cmd['usage'])
 
-
-        self.commands = {
-        }
         self.history = []
         self.curr = "" # The current statement as a list of lines
 
     def findCommand(self, stmt):
         # New command parsing
         cmdline = sqlm.parser.tokenize(stmt)
-        for cmd in self.ncommands.values():
+        for cmd in self.ncommands.values(): # This could be optimized
+                                            # using the first token as a key
             m = cmd['pattern'].match(cmdline)
             if m is not None:
                 return Command(kw=m, **cmd)
-
-        # Legacy command parsing
-        args = shlex.split(stmt)
-        if args and args[0]:
-            cmd = self.commands.get(args[0].upper())
-            if not cmd:
-                cmd = self.commands.get(args[0][0])
-                if cmd:
-                    args = (args[0][0], args[0][1:].strip()) + tuple(args[1:])
 
         if cmd:
             return Command(args=args[1:], **cmd);
@@ -384,13 +373,6 @@ class Interpreter:
         raise EOFError
 
     def doHelp(self, env, cmd=None):
-        # During the transition phase between commands and "new commands"
-        # the code here is mostly duplicated. XXX fix that
-        def showCommandHelp(cmd):
-            usage = self.commands[cmd].get('usage','')
-            desc = self.commands[cmd].get('desc','')
-            print("    {:20s} - {:s}".format(usage, desc))
-
         def showNCommandHelp(cmd):
             usage = self.ncommands[cmd].get('usage','')
             desc = self.ncommands[cmd].get('desc','')
@@ -401,13 +383,10 @@ class Interpreter:
             if cmd in self.ncommands:
                 showNCommandHelp(cmd)
                 return
-            if cmd in self.commands:
-                showCommandHelp(cmd)
-                return
 
         # fall back    
-        for cmd in self.commands:
-            showCommandHelp(cmd)
+        for cmd in sorted(self.ncommands.keys()):
+            showNCommandHelp(cmd)
 
     def doSet(self, env, param=None, value=None):
         env[param.upper()] = value
