@@ -120,42 +120,59 @@ class Interpreter:
         self.formatter = TabularFormatter()
 
         self.ncommands = {
-            "ED [filename] [ ! events...]":  dict(
-                action = self.doEdit,
-                desc="Edit some events in a file"
+            "!" : dict(
+                usage="! events...",
+                action=self.doRunPrevious,
+                desc="execute a command from the buffer history",
+            ),
+            "@" : dict(
+                usage="@path",
+                action=self.doRunScript,
+                desc="execute the commands from a script",
+            ),
+            "READ" : dict(
+                usage="READ tbl [ < path ] [ << heredoc ]",
+                action=self.doRead,
+                desc="Read tabular data to create a table",
+            ),
+            "SET" : dict(
+                usage="SET param value",
+                action=self.doSet,
+                desc="Change internal parameter",
+            ),
+            "ED" : dict(
+                usage="ED [filename] [ ! events...]",
+                action=self.doEdit,
+                desc="Edit some events in a file",
+            ),
+            "HISTORY" : dict(
+                usage="HISTORY [num]",
+                action=self.doHistory,
+                desc="Show the last commands stored into the buffer",
+            ),
+            "HELP" : dict(
+                usage="HELP [cmd]",
+                action=self.doHelp,
+                desc="get some help",
+            ),
+            "QUIT" : dict(
+                usage="QUIT",
+                action=self.doQuit,
+                desc="quit the command line interpreter",
+            ),
+            "CONNECT" : dict(
+                usage="CONNECT url",
+                action=self.doConnect,
+                desc="establish a connection to the database",
             ),
         }
 
         # Compile commands patterns
-        for cmd, d in self.ncommands.items():
-            d['pattern'] = sqlm.parser.compile(cmd)
+        for cmd in self.ncommands.values():
+            cmd['pattern'] = sqlm.parser.compile(cmd['usage'])
 
 
         self.commands = {
-                '!':     dict(action=self.doRunPrevious,
-                                usage="!num",
-                                desc="execute a command from the buffer history"),
-                '@':     dict(action=self.doRunScript,
-                                usage="@path",
-                                desc="execute the commands from a script"),
-                'HISTORY':     dict(action=self.doHistory,
-                                usage="history [n]",
-                                desc="Show the last commands stored into the buffer"),
-                'READ':     dict(action=self.doRead,
-                                usage="read table_name",
-                                desc="Read tabular data to create a table"),
-                'QUIT':     dict(action=self.doQuit,
-                                usage="quit",
-                                desc="quit the command line interpreter"),
-                'CONNECT':  dict(action=self.doConnect,
-                                usage="connect url",
-                                desc="establish a connection to the database"),
-                'HELP':     dict(action=self.doHelp,
-                                usage="help [command]",
-                                desc="get some help"),
-                'SET':     dict(action=self.doSet,
-                                usage="set param value",
-                                desc="Change internal parameter"),
         }
         self.history = []
         self.curr = "" # The current statement as a list of lines
@@ -282,32 +299,24 @@ class Interpreter:
 
         return (args + (None,)*(max-min))[:max]
 
-    def doRunPrevious(self, env, *expr):
-        for num in numSelector(expr):
+    def doRunPrevious(self, env, events=()):
+        for num in numSelector(events):
             self.send(env, self.history[num])
 
-    def doRunScript(self, env, script):
-        print("Running:", script)
-        input_stream = FileInputStream(script)
+    def doRunScript(self, env, path=None):
+        print("Running:", path)
+        input_stream = FileInputStream(path)
         self.console.pushInputStream(input_stream)
 
-    def doRead(self, env, tbl, *args):
-        op1, data1, op2, data2 = self.getArgs(0,4, args)
-        src = None
-        here = '.'
-
+    def doRead(self, env, tbl=None, path=None, heredoc='.'):
         try:
-            if op1 == '<':
-                src = open(data1, "rt")
-                op1 = op2
-                data1 = data2
-
-            if op1 == '<<':
-                here = data1
+            src = None
+            if path:
+                src = open(path, "rt")
 
             r = Reader()
             columns, rows = r.parse(src if src
-                                    else env.input_stream.reader('> ', here))
+                                    else env.input_stream.reader('> ', heredoc))
         finally:
             if src:
                 src.close()
@@ -356,17 +365,15 @@ class Interpreter:
         print("Editing:", filename, "with", editor)
         subprocess.call([editor, filename])
 
-    def doHistory(self, env, *args):
-        n, = self.getArgs(0, 1, args)
-
-        if n is not None:
-            n = int(n)
-            if n < 0:
+    def doHistory(self, env, num=0):
+        if num:
+            num = int(num)
+            if num < 0:
                 raise ArgumentError("Expected a non nul positive integer")
         else:
-            n = len(self.history)
+            num = len(self.history)
 
-        base_idx = max(len(self.history)-n,0)
+        base_idx = max(len(self.history)-num,0)
         for idx, val in enumerate(self.history[base_idx:]):
             header = "{:4d}".format(idx+base_idx)
             for line in str(val).splitlines():
@@ -376,17 +383,24 @@ class Interpreter:
     def doQuit(self, env):
         raise EOFError
 
-    def doHelp(self, env, *args):
+    def doHelp(self, env, cmd=None):
+        # During the transition phase between commands and "new commands"
+        # the code here is mostly duplicated. XXX fix that
         def showCommandHelp(cmd):
             usage = self.commands[cmd].get('usage','')
             desc = self.commands[cmd].get('desc','')
             print("    {:20s} - {:s}".format(usage, desc))
 
-        if len(args) > 1:
-            raise ArgumentError("Usage: help [command]")
+        def showNCommandHelp(cmd):
+            usage = self.ncommands[cmd].get('usage','')
+            desc = self.ncommands[cmd].get('desc','')
+            print("    {:20s} - {:s}".format(usage, desc))
 
-        if len(args) == 1:
-            cmd = args[0].upper()
+        if cmd:
+            cmd = cmd.upper()
+            if cmd in self.ncommands:
+                showNCommandHelp(cmd)
+                return
             if cmd in self.commands:
                 showCommandHelp(cmd)
                 return
@@ -395,10 +409,10 @@ class Interpreter:
         for cmd in self.commands:
             showCommandHelp(cmd)
 
-    def doSet(self, env, attr, value):
-        env[attr.upper()] = value
+    def doSet(self, env, param=None, value=None):
+        env[param.upper()] = value
 
-    def doConnect(self, env, url):
+    def doConnect(self, env, url=None):
         """Establish a connection to the database
 
         ``url`` is assumed to be a valid sqlalchemy connection URL
