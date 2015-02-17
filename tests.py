@@ -1,7 +1,6 @@
 import unittest
-from tests.formatter import *
-from tests.utils import *
-from tests.parser import *
+
+from tests import *
 
 if __name__ == '__main__':
     unittest.main()
