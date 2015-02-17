@@ -183,9 +183,6 @@ class Interpreter:
             if m is not None:
                 return Command(kw=m, **cmd)
 
-        if cmd:
-            return Command(args=args[1:], **cmd);
-
         return None
 
     def abort(self):
@@ -441,6 +438,8 @@ class Interpreter:
 
     def send(self, env, statement, tagline = "\n{n:d} {rows}.\n"):
         statement = str(statement)
+        statement = sqlalchemy.sql.text(statement)
+
         result = self.connection \
                         .execution_options(autocommit=env.autocommit) \
                         .execute(statement)
