@@ -5,7 +5,6 @@ import shlex
 import subprocess
 from getpass import getpass
 from copy import copy
-import sqlalchemy
 import traceback
 
 from sqlm.dialects.oracle import OracleDialect
@@ -16,6 +15,7 @@ from sqlm.utils import numSelector
 
 import sqlm.parser
 import sqlm.utils
+import sqlm.engine
 
 class ArgumentError(Exception):
     def __init__(self, message):
@@ -37,7 +37,7 @@ class Environment:
             "/":        re.compile(r'^(.*)\n/$', re.DOTALL)
         }
         self.termination = self.terminations[";"]
-        self.bindParams = {}
+        self.bindvar = {}
 
         self.autocommit = True
 
@@ -61,9 +61,6 @@ class Environment:
                 self.autocommit = False
             else:
                 raise ArgumentError("Not a valid option for AUTOCOMMIT " + v)
-        elif i[0] == ':': # Bind parameter
-            paramName = i[1:]
-            self.bindParams[paramName] = "XXX" # XXX fix me 
         else:
             raise ArgumentError("Unknown parameter " + i)
 
@@ -78,11 +75,23 @@ class Environment:
         self.termination = self.terminations[term]
 
     def reportErrorDebug(self,err):
-        print(err, file=sys.stderr)
+        print(err.__class__.__name__ + ":", err, file=sys.stderr)
         traceback.print_tb(err.__traceback__)
 
     def reportErrorNorm(self, err):
-        print(err, file=sys.stderr)
+        print(err.__class__.__name__ + ":", err, file=sys.stderr)
+
+    def bind(self, var, typ, value=None):
+        self.bindvar[var.upper()] = (typ, value)
+
+    def bound(self, var):
+        return self.bindvar[var.upper()]
+
+    def update(self, var, value):
+        typ, _ = self.bindvar[var.upper()]
+        self.bindvar[var.upper()] = (typ, value)
+
+        
 
 class Command:
     def __init__(self, action = None, pattern=(), desc = "", usage = "" , args = (), kw = {}):
@@ -164,6 +173,11 @@ class Interpreter:
                 usage="CONNECT url",
                 action=self.doConnect,
                 desc="establish a connection to the database",
+            ),
+            "VAR" : dict(
+                usage="VAR var typ",
+                action=self.doVar,
+                desc="Declare a bind variable",
             ),
         }
 
@@ -388,44 +402,29 @@ class Interpreter:
     def doSet(self, env, param=None, value=None):
         env[param.upper()] = value
 
+    def doVar(self, env, var=None, typ=None):
+        env.bind(var,typ)
+
     def doConnect(self, env, url=None):
         """Establish a connection to the database
 
-        ``url`` is assumed to be a valid sqlalchemy connection URL
-        of the form ``dialect[+driver]://user:password@host/dbname[?key=value..]``
+        ``url`` is assumed to be of the form
+        ``dialect://user:password/connection_string``
 
-        If the password is missing, request it from the console
+        If the password part is missing, request it from the console
+        Note: this is different from the empty password!
         """
-        purl = re.split('(:|@)', url)
-        #                ^^^^^
-        #            is this correct?
-
-        if len(purl) < 3 or purl[3] not in (':', '@'):
-            raise ArgumentError("Can't parse URL")
-
-        if purl[3] == '@':
+        params = sqlm.engine.parse_url(url)
+        if params['password'] == None:
             # No password
-            passwd = getpass()
-            purl = purl[:3] + [':', passwd] + purl[3:]
-
-        the_engine = sqlalchemy.create_engine("".join(purl))
-        the_connection = the_engine.connect()
-
-        # new connection OK: update the member data
-        self.dialect_name = re.split(r'[+:]', url, 1)[0]
-        if self.dialect_name == 'oracle':
-            self.dialect = OracleDialect()
-        else:
-            self.dialect = OracleDialect() # XXX Should use Generic Dialect
+            params['password'] = getpass()
+        
+        the_engine = sqlm.engine.Engine(params)
 
         self.engine = the_engine
-        self.connection = the_connection
+        self.dialect = self.engine.dialect
 
-
-        if not self.connection:
-            raise ArgumentError("Can't connect (wrong password?)")
-
-        return self.connection
+        return self.engine
 
     def display(self, env, result, tagline = None):
         if result.returns_rows:
@@ -438,11 +437,21 @@ class Interpreter:
 
     def send(self, env, statement, tagline = "\n{n:d} {rows}.\n"):
         statement = str(statement)
-        statement = sqlalchemy.sql.text(statement)
+        statement = self.engine.prepare(statement)
 
-        result = self.connection \
-                        .execution_options(autocommit=env.autocommit) \
-                        .execute(statement)
+        for paramname in statement.bindnames:
+            # bind parameters
+            datatype, value = env.bound(paramname)
+            statement.bind(paramname, datatype, value)
+
+        result = statement.execute()
         if result:
             self.display(env, result, tagline)
+
+        
+        for paramname in statement.bindnames:
+            # Get back parameter values and store them
+            # in the environment
+            env.update(paramname, statement[paramname])
+            print(paramname, '=', statement[paramname])
         

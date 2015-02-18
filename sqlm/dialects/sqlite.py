@@ -1,60 +1,20 @@
-import cx_Oracle
+import sqlite3
 
 import sqlm.resultset
-
-_TYPES = {
-    'BINARY' : cx_Oracle.BINARY,
-    'BFILE' : cx_Oracle.BFILE,
-    'BLOB' : cx_Oracle.BLOB,
-    'CLOB' : cx_Oracle.CLOB,
-    'CURSOR' : cx_Oracle.CURSOR,
-    'DATETIME' : cx_Oracle.DATETIME,
-    'CHAR' : cx_Oracle.FIXED_CHAR,
-#    'NCHAR' : cx_Oracle.FIXED_UNICODE,
-    'INTERVAL' : cx_Oracle.INTERVAL,
-    'LOB' : cx_Oracle.LOB,
-    'LONG RAW' : cx_Oracle.LONG_BINARY,
-    'LONG' : cx_Oracle.LONG_STRING,
-    'CLOB' : cx_Oracle.CLOB,
-    'BINARY FLOAT' : cx_Oracle.NATIVE_FLOAT,
-    'BINARY DOUBLE' : cx_Oracle.NATIVE_FLOAT,
-    'NCLOB' : cx_Oracle.NCLOB,
-    'NUMBER' : cx_Oracle.NUMBER,
-    'OBJECT' : cx_Oracle.OBJECT,
-    'ROWID' : cx_Oracle.ROWID,
-    'VARCHAR2' : cx_Oracle.STRING,
-    'TIMESTAMP' : cx_Oracle.TIMESTAMP,
-#    'NVARCHAR2' : cx_Oracle.UNICODE,
-}
 
 class Statement:
     def __init__(self, connection, stmt):
         cursor = connection.cursor()
-        cursor.prepare(stmt)
 
-        self.bindnames = cursor.bindnames()
+        self.bindnames = []
         self.bindparams = {}
 
         self.cursor = cursor
         self.stmt = stmt
 
     def __getitem__(self, bindname):
-        return self.bindparams[bindname.upper()].getvalue()
-
-    def bind(self, bindname, sqltype, value=None):
-        """Bind a variable of the given type with the
-        current statement.
-
-        Variables objects values can be queried to retrieve
-        OUT param values.
-        """
-        datatype = _TYPES[sqltype.upper()]
-        var = self.cursor.var(datatype)
-
-        if value is not None:
-            var.setvalue(0,value)
-
-        self.bindparams[bindname.upper()] = var
+        # let it fail as this is *not* supported on SQLite
+        return self.cursor.bindparams[bindname.upper()].getvalue()
 
     def execute(self, **bindparams):
         for var, value in bindparams.items():
@@ -64,11 +24,11 @@ class Statement:
 
         return sqlm.resultset.ResultSet(self.cursor)
 
-class OracleDialect:
-    """Abstraction layer arround the Oracle driver.
+class SQLiteDialect:
+    """Abstraction layer arround the SQLite3 driver.
     """
 
-    driver = "cx_Oracle"
+    driver = "sqlite3"
 
     # ------------------------------------------------------------------
     # Cursor-related abstraction layer
@@ -81,8 +41,9 @@ class OracleDialect:
         """
         return Statement(connection, stmt)
 
-    def connect(self, username=None, password=None, db=None, **kwargs):
-        return cx_Oracle.connect(username,password,db)
+    def connect(self, db=None, **kwargs):
+        return sqlite3.connect(db)
+
     
 
     # ------------------------------------------------------------------
@@ -97,9 +58,6 @@ class OracleDialect:
 
         m = []
         for name, typ, prec, scale in columns:
-            if typ == 'VARCHAR':
-                typ = 'VARCHAR2'
-
             if scale:
                 prec = '({},{})'.format(prec,scale)
             elif prec:

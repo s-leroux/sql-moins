@@ -140,7 +140,7 @@ class Column(SimpleNamespace):
         # Mandatory arguments
         self.name = name
         self.type_obj = type_obj
-        self.type_code = type_obj.__name__
+        self.type_code = type_obj.__name__ if type_obj else "VARCHAR"
 
         # Optional arguments
         self.display_size = display_size or 0
@@ -305,7 +305,7 @@ class TabularFormatter:
 #        fmt = " " + " | ".join(fmt_list) + " "
 #        sep = "-" + "-+-".join(["-"*item for item in wl])           + "-"
 
-        keys = result.keys()
+        keys = [name for name, *_ in result.cursor.description]
         columns = make_columns(result.cursor.description)
         page = Page(columns)
 
