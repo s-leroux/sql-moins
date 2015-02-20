@@ -25,20 +25,20 @@ import re
 #: Regular expression used by the tokenizer to break
 #: a string into tokens
 _TK_RE = re.compile(r"""("""
-    r"""(?:[!@]+)"""               # special symbols
+    r"""(?:[!@,;()]+)"""               # special symbols
     r"|"
     r"""(?:[\[\]])"""               # backets
     r"|"
     r"""(?:\.\.\.)"""               # ellipsis
     r"|"
     # single quotes + SQL escape
-    r"(?:" r"""'(?:[^']|[']['])*'""" r"(?=(?:]?(?:\.\.\.)?)*(?:\s|$))" r")"  
+    r"(?:" r"""'(?:[^']|[']['])*'""" r"(?=(?:[,;)\]]?(?:\.\.\.)?)*(?:\s|$))" r")"  
     r"|"
     # double quotes
-    r"(?:" r'''"[^"]*"'''            r"(?=(?:]?(?:\.\.\.)?)*(?:\s|$))" r")"
+    r"(?:" r'''"[^"]*"'''            r"(?=(?:[,;)\]]?(?:\.\.\.)?)*(?:\s|$))" r")"
     r"|"
     # non-space non quotes
-    r"(?:" r"""[^'"\s]+?"""          r"(?=(?:]?(?:\.\.\.)?)*(?:\s|$))" r")"
+    r"(?:" r"""[^'"\s]+?"""          r"(?=(?:[,;)\]]?(?:\.\.\.)?)*(?:\s|$))" r")"
     r")")
 
 def _unquote(tk):
